@@ -1,0 +1,63 @@
+---
+title: "WorldMirror 2.0: unified feed-forward 3D reconstruction"
+description: "WorldMirror 2.0 is a ~1.2B-parameter feed-forward model predicting depth, normals, camera poses, point clouds, and 3DGS from multi-view images or video."
+---
+
+WorldMirror 2.0 is the world reconstruction backbone of HY-World 2.0. Given a set of multi-view images or a casual video, it runs a single feed-forward pass through a ~1.2B-parameter Vision Transformer and simultaneously produces every major geometric primitive you need to represent a 3D scene — no iterative optimization required.
+
+## What WorldMirror 2.0 predicts
+
+Each forward pass produces the following outputs for all input views at once:
+
+| Output | Description |
+|--------|-------------|
+| **3D point cloud** | Dense colored point map in world coordinates (`points.ply`) |
+| **Per-view depth maps** | Z-depth in camera frame, saved as PNG visualization + raw float32 NPY |
+| **Surface normals** | Per-view normal maps in camera coordinates (PNG) |
+| **Camera poses** | Camera-to-world (c2w) extrinsics in OpenCV convention, plus 3×3 intrinsic matrices |
+| **3D Gaussian Splatting** | Gaussian means, scales, rotations, opacities, and SH coefficients (`gaussians.ply`) |
+
+The point cloud and Gaussian splat share the same world coordinate frame. Camera poses use the standard OpenCV convention (Z forward, Y down).
+
+## Key improvements over WorldMirror 1.0
+
+WorldMirror 2.0 introduces three architectural and training improvements compared to its predecessor:
+
+- **Normalized RoPE** — Rotary position embeddings are normalized across the token sequence, enabling stable inference at resolutions the model was not explicitly trained on.
+- **Depth mask prediction** — The model explicitly predicts a validity mask for each depth estimate, allowing robust handling of textureless regions, reflections, and sky pixels without relying solely on post-processing heuristics.
+- **Sequence Parallel + FSDP + BF16** — Token sequences in the ViT backbone are sharded across GPUs (Sequence Parallel), combined with Fully Sharded Data Parallel weight sharding and bfloat16 mixed precision, enabling efficient inference at scale.
+
+## Flexible resolution inference
+
+WorldMirror 2.0 supports a wide range of input resolutions. Images are resized and center-cropped so that the total pixel count falls between **50K and 500K pixels**, rounded to the nearest multiple of 14. The `target_size` parameter (default `952`) controls the longest edge before cropping. Normalized RoPE ensures quality is maintained across this resolution range rather than degrading outside a fixed training resolution.
+
+## Quick start
+
+```python
+from hyworld2.worldrecon.pipeline import WorldMirrorPipeline
+
+pipeline = WorldMirrorPipeline.from_pretrained("tencent/HY-World-2.0")
+pipeline("path/to/images")
+```
+
+Model weights are downloaded automatically from Hugging Face on first run (subfolder `HY-WorldMirror-2.0` inside the `tencent/HY-World-2.0` repo).
+
+## Explore the WorldMirror 2.0 docs
+
+<CardGroup cols={2}>
+  <Card title="Python API reference" href="/worldmirror/python-api">
+    Full parameter reference for `WorldMirrorPipeline.from_pretrained` and `__call__`, including all inference, save, mask, compression, and prior options.
+  </Card>
+  <Card title="CLI reference" href="/worldmirror/cli">
+    Run WorldMirror 2.0 from the command line on a single GPU or across multiple GPUs with `torchrun`.
+  </Card>
+  <Card title="Prior injection" href="/worldmirror/prior-injection">
+    Improve reconstruction accuracy by supplying known camera poses, intrinsics, or depth maps as conditioning inputs.
+  </Card>
+  <Card title="Multi-GPU inference" href="/worldmirror/multi-gpu">
+    Scale inference across 2, 4, or 8 GPUs using Sequence Parallel sharding and FSDP.
+  </Card>
+  <Card title="Gradio web demo" href="/worldmirror/gradio-app">
+    Launch an interactive browser demo to upload images or video and visualize all WorldMirror outputs in real time.
+  </Card>
+</CardGroup>

@@ -1,0 +1,78 @@
+---
+title: "World composition with WorldMirror 2.0 and 3DGS"
+description: "WorldMirror 2.0 lifts multi-view frames into a calibrated point cloud; 3DGS optimization then fits Gaussian primitives to produce a navigable 3D world."
+---
+
+World composition is the final stage of HY-World 2.0's generation pipeline. It takes the multi-view image sequence produced by WorldStereo 2.0 and turns it into a fully navigable 3D world that you can load into a game engine, explore in first-person mode, or export as a mesh. The stage runs in two steps: WorldMirror 2.0 lifts the images into a dense point cloud with calibrated camera parameters, and a 3DGS optimization step fits Gaussian primitives to that point cloud to produce a real-time-renderable representation.
+
+## Role in the pipeline
+
+World composition is the last of the four world generation stages. Everything produced upstream — the panorama, the trajectory, the multi-view frames — feeds into this stage, which is responsible for creating the final persistent 3D asset.
+
+| Stage | Component | Input | Output |
+|-------|-----------|-------|--------|
+| 3 | WorldStereo 2.0 | Panorama + trajectory | Multi-view image sequence |
+| **4** | **WorldMirror 2.0 + 3DGS** | **Multi-view frames** | **Navigable 3D world (3DGS / mesh)** |
+
+Because WorldMirror 2.0 is the backbone of both world generation (this stage) and world reconstruction (the standalone pipeline), its architecture is described in detail on the [WorldMirror 2.0 overview](/worldmirror/overview) page.
+
+## WorldMirror 2.0: multi-view to point cloud
+
+WorldMirror 2.0 is a unified feed-forward ~1.2B-parameter Vision Transformer. Given the multi-view frames from WorldStereo 2.0, it runs a single forward pass and simultaneously predicts:
+
+- **Dense 3D point cloud** in a shared world coordinate frame
+- **Per-view depth maps** and surface normals
+- **Camera poses** (camera-to-world extrinsics, OpenCV convention) and intrinsic matrices
+- **Initial 3D Gaussian Splatting attributes** — means, scales, rotations, opacities, and degree-0 spherical harmonics coefficients
+
+These outputs give the downstream 3DGS optimization a geometrically calibrated starting point rather than a random initialization, which dramatically reduces the number of optimization iterations required and improves the quality of the final result.
+
+## 3DGS optimization
+
+Starting from the point cloud and initial Gaussian attributes produced by WorldMirror 2.0, the 3DGS learning step optimizes each Gaussian primitive against the input views. The following attributes are learned:
+
+| Attribute | Shape per Gaussian | Description |
+|-----------|--------------------|-------------|
+| Means | `(3,)` | 3D center position in world coordinates |
+| Scales | `(3,)` | Axis-aligned radii of the Gaussian ellipsoid |
+| Rotations | `(4,)` | Orientation as a unit quaternion |
+| Opacities | scalar | Alpha value for volume rendering |
+| Spherical harmonics | `(1, 3)` per degree-0 band | View-dependent color representation |
+
+After optimization, the Gaussian splat renders correctly from any novel viewpoint in real time on a consumer GPU, without requiring any additional model inference.
+
+## Output formats
+
+The composition stage produces the following files, compatible with standard 3D tools and game engines:
+
+| File | Format | Description |
+|------|--------|-------------|
+| `gaussians.ply` | PLY (standard 3DGS) | Optimized Gaussian Splatting, viewable in any 3DGS viewer |
+| `points.ply` | PLY | Dense colored point cloud in world coordinates |
+| `camera_params.json` | JSON | Camera extrinsics (c2w) and intrinsics for all input views |
+| Depth maps | PNG + NPY | Per-view depth in camera frame |
+| Normal maps | PNG | Per-view surface normals in camera coordinates |
+
+The `.ply` format is natively supported by Blender (via the [Gaussian Splatting add-on](https://github.com/ReshotAI/gaussian-splatting-blender)), Unreal Engine (via the **3D Gaussian Splatting** plugin), Unity, and NVIDIA Isaac Sim. Mesh export is also available from the point cloud using standard surface reconstruction tools.
+
+## Engine compatibility
+
+<Tip>
+  The `gaussians.ply` output follows the standard 3DGS PLY attribute layout used by the original Gaussian Splatting codebase, making it compatible with the broader ecosystem of viewers and engine integrations without any format conversion.
+</Tip>
+
+| Engine / Tool | Import format | Notes |
+|---------------|--------------|-------|
+| Blender | `.ply` | Requires Gaussian Splatting add-on |
+| Unreal Engine | `.ply` | 3D Gaussian Splatting plugin |
+| Unity | `.ply` | Third-party 3DGS packages |
+| NVIDIA Isaac Sim | `.ply` / mesh | Physics-based simulation with 3D assets |
+| Generic viewers | `.ply` | SuperSplat, WebGL-based viewers |
+
+## WorldMirror 2.0 documentation
+
+The WorldMirror 2.0 model that powers this stage has its own detailed documentation, including Python API reference, CLI, prior injection, and multi-GPU inference.
+
+<Card title="WorldMirror 2.0 overview" icon="cube" href="/worldmirror/overview">
+  Full documentation for the WorldMirror 2.0 reconstruction backbone: architecture, Python API, CLI reference, prior injection, and multi-GPU inference.
+</Card>

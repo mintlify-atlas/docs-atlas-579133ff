@@ -1,0 +1,84 @@
+---
+title: "Model Zoo: available checkpoints and weights"
+description: "All HY-World 2.0 model checkpoints with parameter counts, release dates, and Hugging Face download links for WorldMirror, HY-Pano, and WorldStereo."
+---
+
+HY-World 2.0 is being released incrementally. WorldMirror 2.0 is available now with approximately 1.2 billion parameters. The panorama generation, world expansion, and trajectory planning models are scheduled for release soon. All available models are hosted on Hugging Face and download automatically via `from_pretrained` on first run.
+
+<Note>
+  Model weights for WorldMirror 2.0 are downloaded automatically from Hugging Face the first time you call `WorldMirrorPipeline.from_pretrained`. You do not need to download them manually unless you want to use a local checkpoint.
+</Note>
+
+## World reconstruction — WorldMirror series
+
+WorldMirror models reconstruct 3D geometry from multi-view images or video. They predict depth maps, surface normals, camera parameters, point clouds, and 3DGS attributes simultaneously in a single forward pass.
+
+| Model | Description | Params | Date | Download |
+|-------|-------------|--------|------|----------|
+| **WorldMirror 2.0** | Multi-view images / video → 3D reconstruction. Current recommended model. | ~1.2B | April 2026 | [tencent/HY-World-2.0/HY-WorldMirror-2.0](https://huggingface.co/tencent/HY-World-2.0) |
+| WorldMirror 1.0 | Multi-view images / video → 3D reconstruction. Legacy model, superseded by 2.0. | ~1.2B | October 2025 | [tencent/HunyuanWorld-Mirror](https://huggingface.co/tencent/HunyuanWorld-Mirror/tree/main) |
+
+To load WorldMirror 2.0 using the Python API:
+
+```python
+from hyworld2.worldrecon.pipeline import WorldMirrorPipeline
+
+# Weights download automatically from Hugging Face on first run
+pipeline = WorldMirrorPipeline.from_pretrained('tencent/HY-World-2.0')
+result = pipeline('path/to/images')
+```
+
+To load a specific subfolder or local checkpoint:
+
+```python
+pipeline = WorldMirrorPipeline.from_pretrained(
+    pretrained_model_name_or_path='tencent/HY-World-2.0',
+    subfolder='HY-WorldMirror-2.0',
+)
+```
+
+For the full `from_pretrained` parameter reference, see [WorldMirror Python API](/worldmirror/python-api).
+
+## Panorama generation — HY-Pano series
+
+HY-Pano models generate 360° equirectangular panoramas from text prompts or single perspective images. They use an MMDiT-based architecture with an implicit perspective-to-ERP mapping.
+
+| Model | Description | Params | Date | Download |
+|-------|-------------|--------|------|----------|
+| HY-Pano 2.0 | Text / image → 360° panorama | — | Coming soon | — |
+
+<Note>
+  HY-Pano 2.0 model weights and inference code have not yet been released. As an interim, [HunyuanWorld 1.0](https://github.com/Tencent-Hunyuan/HunyuanWorld-1.0) is available as an alternative panorama generation approach.
+</Note>
+
+## World expansion — WorldStereo series
+
+WorldStereo models expand a panorama along a planned camera trajectory using memory-driven video generation, synthesizing multi-view images that together cover the full navigable 3D scene.
+
+| Model | Description | Params | Date | Download |
+|-------|-------------|--------|------|----------|
+| WorldStereo 2.0 | Panorama + camera trajectory → multi-view images | — | Coming soon | — |
+
+<Note>
+  WorldStereo 2.0 model weights and inference code have not yet been released. The open-source [WorldStereo](https://github.com/FuchengSu/WorldStereo) repository is available as a preview of the underlying approach.
+</Note>
+
+## Spatial planning — WorldNav series
+
+WorldNav is a trajectory planning algorithm that computes a realistic camera path through a generated panoramic scene. It does not carry learnable weights in the traditional sense.
+
+| Algorithm | Description | Params | Date |
+|-----------|-------------|--------|------|
+| WorldNav | Panorama → camera trajectory | — | Coming soon |
+
+<Note>
+  WorldNav inference code has not yet been released. It will be published alongside the full world generation pipeline.
+</Note>
+
+## Choosing a model
+
+If you want to **reconstruct 3D geometry from existing photos or video**, use **WorldMirror 2.0**. It is the only model currently available for download and is the recommended starting point for all reconstruction tasks.
+
+If you want to **generate a 3D world from text or a single image**, the full generation pipeline (HY-Pano 2.0 + WorldNav + WorldStereo 2.0 + WorldMirror 2.0) is not yet fully open-sourced. Check back for updates, or refer to the prior works listed above for interim alternatives.
+
+For benchmark results comparing WorldMirror 2.0 against competing methods on 7-Scenes, NRGBD, and DTU, see [performance](/reference/performance).

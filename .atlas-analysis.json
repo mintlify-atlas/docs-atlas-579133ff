@@ -1,0 +1,77 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "HY-World 2.0",
+  "projectDescription": "A multi-modal world model framework that reconstructs, generates, and simulates navigable 3D worlds (meshes and 3D Gaussian Splatting) from text, images, and video inputs.",
+  "theme": "luma",
+  "primaryColor": "#0858e4",
+  "lightColor": "#36bcfa",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "architecture",
+              "model-zoo"
+            ]
+          },
+          {
+            "group": "Getting Started",
+            "pages": [
+              "getting-started/installation",
+              "getting-started/quickstart"
+            ]
+          },
+          {
+            "group": "WorldMirror 2.0",
+            "pages": [
+              "worldmirror/overview",
+              "worldmirror/python-api",
+              "worldmirror/cli",
+              "worldmirror/prior-injection",
+              "worldmirror/multi-gpu",
+              "worldmirror/gradio-app"
+            ]
+          },
+          {
+            "group": "World Generation",
+            "pages": [
+              "worldgen/overview",
+              "worldgen/panorama-generation",
+              "worldgen/world-expansion",
+              "worldgen/world-composition"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/output-formats",
+              "reference/performance",
+              "reference/advanced-options"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "World Reconstruction: multi-view images or video to 3D (point clouds, depth, normals, camera poses, 3DGS) in a single forward pass via WorldMirror 2.0",
+    "World Generation: text or single image to navigable 3D world via 4-stage pipeline (HY-Pano 2.0 → WorldNav → WorldStereo 2.0 → WorldMirror 2.0)",
+    "Prior injection for camera extrinsics, intrinsics, and depth maps to improve reconstruction accuracy",
+    "Multi-GPU inference with Sequence Parallel (SP), FSDP, and bfloat16 support",
+    "Interactive Gradio web demo for real-time 3DGS visualization",
+    "Engine-compatible outputs (3DGS, meshes, PLY, COLMAP) importable into Blender/Unity/Unreal Engine/Isaac Sim",
+    "Flexible-resolution inference (50K–500K pixels) with normalized RoPE"
+  ],
+  "publicApiSurface": [
+    "WorldMirrorPipeline.from_pretrained(pretrained_model_name_or_path, subfolder, config_path, ckpt_path, use_fsdp, enable_bf16, fsdp_cpu_offload, disable_heads)",
+    "WorldMirrorPipeline.__call__(input_path, output_path, target_size, fps, video_strategy, save_depth, save_normal, save_gs, save_camera, save_points, save_colmap, prior_cam_path, prior_depth_path, compress_pts, save_rendered)",
+    "python -m hyworld2.worldrecon.pipeline --input_path <path> [options]",
+    "python -m hyworld2.worldrecon.gradio_app [--port] [--share] [--use_fsdp] [--enable_bf16]",
+    "torchrun --nproc_per_node=N -m hyworld2.worldrecon.pipeline --input_path <path> --use_fsdp --enable_bf16"
+  ]
+}

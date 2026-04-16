@@ -1,122 +1,73 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "HY-World 2.0",
+  "theme": "luma",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#0858e4",
+    "light": "#36bcfa"
   },
-  "favicon": "/favicon.svg",
-  "navigation": {
-    "tabs": [
-      {
-        "tab": "Guides",
-        "groups": [
-          {
-            "group": "Getting started",
-            "pages": [
-              "index",
-              "quickstart",
-              "development"
-            ]
-          },
-          {
-            "group": "Customization",
-            "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
-          },
-          {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API reference",
-        "groups": [
-          {
-            "group": "API documentation",
-            "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
-            ]
-          }
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
+  "favicon": "https://media.brand.dev/4efdcf3e-ba7c-49e9-89c6-6fa938f4b5c5.png",
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "type": "github",
+      "href": "https://github.com/Tencent-Hunyuan/HY-World-2.0"
     }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/Tencent-Hunyuan/HY-World-2.0"
     }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "architecture",
+              "model-zoo"
+            ]
+          },
+          {
+            "group": "Getting Started",
+            "pages": [
+              "getting-started/installation",
+              "getting-started/quickstart"
+            ]
+          },
+          {
+            "group": "WorldMirror 2.0",
+            "pages": [
+              "worldmirror/overview",
+              "worldmirror/python-api",
+              "worldmirror/cli",
+              "worldmirror/prior-injection",
+              "worldmirror/multi-gpu",
+              "worldmirror/gradio-app"
+            ]
+          },
+          {
+            "group": "World Generation",
+            "pages": [
+              "worldgen/overview",
+              "worldgen/panorama-generation",
+              "worldgen/world-expansion",
+              "worldgen/world-composition"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/output-formats",
+              "reference/performance",
+              "reference/advanced-options"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

@@ -1,0 +1,63 @@
+---
+title: "WorldMirror 2.0 benchmark results and accuracy"
+description: "Quantitative results for WorldMirror 2.0 on 7-Scenes, NRGBD, and DTU, and WorldStereo 2.0 on camera control and single-view reconstruction benchmarks."
+---
+
+The tables below reproduce the quantitative results from the HY-World 2.0 technical report. WorldMirror 2.0 is evaluated on point map reconstruction across three standard datasets — 7-Scenes, NRGBD, and DTU — under multiple resolution and prior configurations. WorldStereo 2.0 is evaluated on camera control accuracy and the quality of single-view-generated reconstructions against competitive baselines.
+
+## WorldMirror 2.0 — point map reconstruction
+
+Point map reconstruction accuracy and completeness on 7-Scenes (indoor scene), NRGBD (indoor scene), and DTU (object-centric). Lower is better for both metrics. "L / M / H" denote low, medium, and high inference resolution. "+all priors" means camera extrinsics, camera intrinsics, and depth maps are all injected as conditioning inputs.
+
+| Method | 7-Scenes Acc. ↓ | 7-Scenes Comp. ↓ | NRGBD Acc. ↓ | NRGBD Comp. ↓ | DTU Acc. ↓ | DTU Comp. ↓ |
+|--------|-----------------|------------------|--------------|---------------|------------|-------------|
+| *WorldMirror 1.0* | | | | | | |
+| L | 0.043 | 0.055 | 0.046 | 0.049 | 1.476 | 1.768 |
+| L + all priors | 0.021 | 0.026 | 0.022 | 0.020 | 1.347 | 1.392 |
+| M | 0.043 | 0.049 | 0.041 | 0.045 | 1.017 | 1.780 |
+| M + all priors | 0.018 | 0.023 | 0.016 | 0.014 | 0.735 | 0.935 |
+| H | 0.079 | 0.087 | 0.077 | 0.093 | 2.271 | 2.113 |
+| H + all priors | 0.042 | 0.041 | 0.078 | 0.082 | 1.773 | 1.478 |
+| *WorldMirror 2.0* | | | | | | |
+| L | 0.041 | 0.052 | 0.047 | 0.058 | 1.352 | 2.009 |
+| L + all priors | 0.019 | 0.024 | 0.017 | 0.015 | 1.100 | 1.201 |
+| M | 0.033 | 0.046 | 0.039 | 0.047 | 1.005 | 1.892 |
+| M + all priors | 0.013 | 0.017 | **0.013** | **0.013** | 0.690 | 0.876 |
+| H | 0.037 | 0.040 | 0.046 | 0.053 | 0.845 | 1.904 |
+| **H + all priors** | **0.012** | **0.016** | 0.015 | 0.016 | **0.554** | **0.771** |
+
+## WorldStereo 2.0 — camera control
+
+Camera control accuracy (lower is better) and visual quality (higher is better) compared to SEVA, Gen3C, and the original WorldStereo. RotErr and TransErr are rotation and translation errors; ATE is absolute trajectory error. Q-Align, CLIP-IQA+, Laion-Aes, and CLIP-I measure perceptual quality.
+
+| Method | RotErr ↓ | TransErr ↓ | ATE ↓ | Q-Align ↑ | CLIP-IQA+ ↑ | Laion-Aes ↑ | CLIP-I ↑ |
+|--------|----------|------------|-------|-----------|-------------|-------------|----------|
+| SEVA | 1.690 | 1.578 | 2.879 | 3.232 | 0.479 | 4.623 | 77.16 |
+| Gen3C | 0.944 | 1.580 | 2.789 | 3.353 | 0.489 | 4.863 | 82.33 |
+| WorldStereo | 0.762 | 1.245 | 2.141 | 4.149 | **0.547** | 5.257 | 89.05 |
+| **WorldStereo 2.0** | **0.492** | **0.968** | **1.768** | **4.205** | 0.544 | **5.266** | **89.43** |
+
+## WorldStereo 2.0 — single-view-generated reconstruction
+
+Precision, Recall, F1-Score, and AUC on Tanks-and-Temples and MipNeRF360. Higher is better for all metrics. WorldStereo 2.0 (DMD) is a distilled variant using Distribution Matching Distillation.
+
+| Method | T&T Prec. ↑ | T&T Recall ↑ | T&T F1 ↑ | T&T AUC ↑ | MipNeRF360 Prec. ↑ | MipNeRF360 Recall ↑ | MipNeRF360 F1 ↑ | MipNeRF360 AUC ↑ |
+|--------|-------------|--------------|----------|-----------|---------------------|----------------------|-----------------|------------------|
+| SEVA | 33.59 | 35.34 | 36.73 | 51.03 | 22.38 | 55.63 | 28.75 | 46.81 |
+| Gen3C | 46.73 | 25.51 | 31.24 | 42.44 | 23.28 | **75.37** | 35.26 | 52.10 |
+| Lyra | **50.38** | 28.67 | 32.54 | 43.05 | 30.02 | 58.60 | 36.05 | 49.89 |
+| FlashWorld | 26.58 | 20.72 | 22.29 | 30.45 | 35.97 | 53.77 | 42.60 | 53.86 |
+| WorldStereo 2.0 | 43.62 | 41.02 | 41.43 | 58.19 | **43.19** | 65.32 | **51.27** | **65.79** |
+| WorldStereo 2.0 (DMD) | 40.41 | **44.41** | **43.16** | **60.09** | 42.34 | 64.83 | 50.52 | 65.64 |
+
+## Effect of prior injection
+
+Injecting geometric priors as conditioning inputs consistently improves WorldMirror 2.0 accuracy across all benchmarks. The three supported prior types — camera extrinsics, camera intrinsics, and per-view depth maps — can be used independently or together.
+
+The "+all priors" rows in the reconstruction table above represent the strongest configuration: all three prior types supplied simultaneously. At high resolution (H) with all priors, WorldMirror 2.0 achieves its best results on 7-Scenes (**0.012 Acc., 0.016 Comp.**) and DTU (**0.554 Acc., 0.771 Comp.**).
+
+See the [prior injection guide](/worldmirror/prior-injection) for instructions on preparing and passing camera and depth priors to the pipeline.
+
+<Note>
+For the full set of ablation studies, qualitative comparisons, and comparisons with Pow3R and MapAnything, refer to the [HY-World 2.0 technical report](https://3d-models.hunyuan.tencent.com/world/world2_0/HY_World_2_0.pdf).
+</Note>

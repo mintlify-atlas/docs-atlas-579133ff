@@ -1,0 +1,111 @@
+---
+title: "Multi-GPU WorldMirror inference: SP and FSDP guide"
+description: "Scale WorldMirror 2.0 across 2–8 GPUs using Sequence Parallel token sharding in the ViT backbone with Fully Sharded Data Parallel weight distribution."
+---
+
+WorldMirror 2.0 supports native multi-GPU inference through a combination of **Sequence Parallel (SP)** token sharding and **Fully Sharded Data Parallel (FSDP)** weight distribution. In SP mode, the token sequence processed by the ViT backbone is split across GPU ranks, so each GPU handles a different subset of views. DPT prediction heads then process their assigned frames independently before gathering results. This approach scales memory and compute requirements near-linearly with the number of GPUs.
+
+## Image count requirement
+
+<Warning>
+The number of input images **must be greater than or equal to** the number of GPUs (`--nproc_per_node`). For example, if you launch with `--nproc_per_node=8`, you must provide at least 8 input images. The pipeline raises a `ValueError` and skips the input if this condition is not met.
+</Warning>
+
+## CLI examples
+
+<CodeGroup>
+
+```bash 2 GPUs
+torchrun --nproc_per_node=2 \
+    -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --use_fsdp --enable_bf16
+```
+
+```bash 4 GPUs
+torchrun --nproc_per_node=4 \
+    -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --use_fsdp --enable_bf16
+```
+
+```bash 8 GPUs
+torchrun --nproc_per_node=8 \
+    -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --use_fsdp --enable_bf16
+```
+
+</CodeGroup>
+
+`--use_fsdp` and `--enable_bf16` can be used independently. FSDP shards weights across ranks; BF16 reduces activation and parameter memory. Both together give the largest memory saving.
+
+## Python API
+
+Inside a script launched with `torchrun`, the Python API is identical to the single-GPU case. Distributed mode is auto-detected from the `WORLD_SIZE` environment variable:
+
+```python
+# Run with: torchrun --nproc_per_node=4 my_script.py
+from hyworld2.worldrecon.pipeline import WorldMirrorPipeline
+
+pipeline = WorldMirrorPipeline.from_pretrained(
+    "tencent/HY-World-2.0",
+    use_fsdp=True,
+    enable_bf16=True,
+)
+
+# All ranks call pipeline() — post-processing runs on rank 0 only
+pipeline("path/to/images")
+```
+
+Each rank must call `from_pretrained` independently. The method handles `torch.distributed` initialization internally.
+
+## CPU offload option
+
+<Note>
+When GPU memory is limited, pass `--fsdp_cpu_offload` (CLI) or `fsdp_cpu_offload=True` (Python API) to offload FSDP parameters to CPU between forward passes. This significantly reduces peak GPU memory at the cost of PCIe transfer overhead and slower throughput.
+</Note>
+
+```bash
+torchrun --nproc_per_node=4 \
+    -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --use_fsdp --enable_bf16 \
+    --fsdp_cpu_offload
+```
+
+## What happens under the hood
+
+When `WORLD_SIZE > 1` is detected, `from_pretrained` performs the following steps automatically:
+
+1. **Process group initialization** — `dist.init_process_group(backend="nccl")` is called if not already initialized. Each rank is assigned a local CUDA device via `LOCAL_RANK`.
+
+2. **Model load and broadcast** — The full model is loaded on rank 0 from the checkpoint and broadcast to all other ranks via `sync_module_states=True` during FSDP wrapping.
+
+3. **FSDP sharding** — When `use_fsdp=True`, FSDP wraps the model with `ShardingStrategy.FULL_SHARD`, distributing parameters evenly across the Sequence Parallel process group. Each rank holds only `1/N` of the total parameters in steady state.
+
+4. **Sequence Parallel forward pass** — During inference, the input token sequence is split across ranks inside the ViT backbone (`DistBlock` layers). DPT prediction heads split frames across ranks and use `AllGather` to collect results from all ranks.
+
+5. **Rank-0 post-processing** — Mask computation, file saving, timing, and COLMAP export run exclusively on rank 0. Other ranks participate in the distributed barrier and then exit. When timing is enabled, per-rank peak GPU memory statistics are gathered via `all_gather` and averaged.
+
+## Example: multi-GPU with prior injection
+
+All `__call__` parameters work identically in multi-GPU mode:
+
+```python
+# torchrun --nproc_per_node=4 script.py
+from hyworld2.worldrecon.pipeline import WorldMirrorPipeline
+
+pipeline = WorldMirrorPipeline.from_pretrained(
+    "tencent/HY-World-2.0",
+    use_fsdp=True,
+    enable_bf16=True,
+)
+
+pipeline(
+    "path/to/images",
+    prior_cam_path="camera_params.json",
+    prior_depth_path="depth_maps/",
+    save_colmap=True,
+)
+```

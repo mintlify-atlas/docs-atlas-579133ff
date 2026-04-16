@@ -1,0 +1,80 @@
+---
+title: "HY-World 2.0 system architecture and pipeline"
+description: "HY-World 2.0 uses a four-stage pipeline — panorama, trajectory, expansion, composition — to turn text or images into navigable 3D worlds."
+---
+
+HY-World 2.0 transforms text or a single image into a navigable 3D world through a sequential four-stage pipeline. Each stage is a specialized model that hands off structured output to the next. Alongside the generation pipeline, WorldMirror 2.0 operates as a standalone reconstruction model that accepts multi-view images or video and produces 3D geometry in a single forward pass.
+
+## Four-stage world generation pipeline
+
+The generation pipeline converts an unstructured prompt or image into a fully explorable 3D world (3DGS / mesh) by progressively building up spatial structure: first a panoramic scene, then a planned camera path through it, then a stereoscopic 3D expansion, and finally a unified 3D scene composition.
+
+<Steps>
+  <Step title="Panorama generation — HY-Pano 2.0">
+    HY-Pano 2.0 converts a text description or a single perspective image into a 360° equirectangular panorama (ERP). It uses an MMDiT-based architecture that learns an implicit mapping from perspective image space to ERP space, enabling geometrically consistent panoramic synthesis without requiring panoramic training data.
+
+    **Input:** text prompt or single-view image
+    **Output:** 360° equirectangular panorama
+  </Step>
+  <Step title="Trajectory planning — WorldNav">
+    WorldNav takes the generated panorama and plans a realistic camera trajectory through the scene. It determines the sequence of viewpoints a virtual camera should visit to explore the world, producing a set of camera poses that guide the subsequent world expansion step.
+
+    **Input:** 360° panorama
+    **Output:** planned camera trajectory (sequence of camera poses)
+  </Step>
+  <Step title="World expansion — WorldStereo 2.0">
+    WorldStereo 2.0 uses memory-driven video generation to expand the panorama along the planned camera trajectory, synthesizing novel views with accurate geometric and photometric consistency across frames. It produces a dense set of multi-view images that together cover the navigable extent of the 3D world.
+
+    **Input:** panorama + camera trajectory
+    **Output:** multi-view image sequence covering the scene
+  </Step>
+  <Step title="World composition — WorldMirror 2.0 + 3DGS learning">
+    WorldMirror 2.0 fuses the expanded multi-view images into a unified 3D representation. In a single forward pass it predicts depth maps, surface normals, camera parameters, point clouds, and 3DGS attributes for all views simultaneously. A subsequent 3DGS optimization step refines the Gaussian splats into a final, renderable 3D world.
+
+    **Input:** multi-view images
+    **Output:** 3DGS world, meshes, point clouds, depth maps, normals, camera parameters
+  </Step>
+</Steps>
+
+## Sub-model components
+
+<CardGroup cols={2}>
+  <Card title="HY-Pano 2.0" icon="panorama" href="/worldgen/panorama-generation">
+    MMDiT-based panorama generator. Accepts text or a single image and produces a 360° ERP panorama. Model weights and code coming soon.
+  </Card>
+  <Card title="WorldNav" icon="route" href="/worldgen/overview">
+    Geometry-aware trajectory planner. Computes a sequence of camera poses that guide coherent exploration of a generated panoramic scene. Code coming soon.
+  </Card>
+  <Card title="WorldStereo 2.0" icon="film" href="/worldgen/world-expansion">
+    Memory-driven video generation model. Synthesizes novel views along the planned trajectory with multi-view geometric consistency. Model weights and code coming soon.
+  </Card>
+  <Card title="WorldMirror 2.0" icon="cube" href="/worldmirror/overview">
+    Unified feed-forward reconstruction model. Predicts depth, normals, camera poses, point clouds, and 3DGS simultaneously from multi-view input. Available now.
+  </Card>
+</CardGroup>
+
+## WorldMirror 2.0 architecture
+
+WorldMirror 2.0 is the reconstruction backbone of HY-World 2.0. It functions both as the final composition stage in the generation pipeline and as a standalone model for reconstructing real-world scenes from photos or video.
+
+### Key architectural features
+
+WorldMirror 2.0 introduces three architectural improvements over WorldMirror 1.0:
+
+**Normalized RoPE** — Rotary Position Embeddings are normalized to support flexible-resolution inference. This allows the model to handle inputs ranging from 50K to 500K pixels without retraining, enabling a trade-off between speed and reconstruction quality at inference time.
+
+**Depth mask prediction** — A dedicated mask head predicts which pixels contain valid depth information (as opposed to sky, occlusions, or out-of-bounds regions). This allows the model to handle invalid pixels robustly instead of propagating noise into the point cloud and Gaussian outputs.
+
+**Sequence Parallel + FSDP + BF16** — For multi-GPU inference, token sequences from the ViT backbone are sharded across GPUs using Sequence Parallel, model parameters are sharded via Fully Sharded Data Parallel (FSDP), and bfloat16 mixed precision reduces memory footprint. DPT prediction heads process frames in parallel across ranks and gather results via AllGather.
+
+### Prediction outputs
+
+In a single forward pass, WorldMirror 2.0 produces:
+
+- **3D point clouds** in world coordinates
+- **Per-view depth maps** in camera frame (Z-depth)
+- **Surface normals** in camera coordinates
+- **Camera poses** — camera-to-world (c2w) matrices and intrinsic matrices, OpenCV convention
+- **3D Gaussian Splatting attributes** — means, scales, rotations, opacities, and spherical harmonic coefficients
+
+For the complete output tensor layout and file format details, see [output formats](/reference/output-formats).

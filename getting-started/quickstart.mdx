@@ -1,0 +1,104 @@
+---
+title: "Get started with HY-World 2.0 reconstruction"
+description: "Run your first WorldMirror 2.0 reconstruction from images or video, view the output files, and inject camera or depth priors for higher accuracy."
+---
+
+WorldMirror 2.0 is the open-source reconstruction component of HY-World 2.0. It takes a directory of images or a video file as input and produces a complete 3D scene — Gaussian splats, a colored point cloud, per-view depth maps, surface normals, and camera parameters — in a single forward pass. This guide covers the three-step workflow: install, run, and inspect outputs.
+
+<Steps>
+  <Step title="Install">
+    Complete the [installation guide](/getting-started/installation) to set up your conda environment, PyTorch, and FlashAttention before proceeding.
+  </Step>
+
+  <Step title="Run WorldMirror 2.0">
+    Choose the Python API or CLI depending on your workflow.
+
+    <Tabs>
+      <Tab title="Python API">
+        The Python API follows a `diffusers`-style interface. Load the pipeline once and call it with an input path:
+
+        ```python
+        from hyworld2.worldrecon.pipeline import WorldMirrorPipeline
+
+        pipeline = WorldMirrorPipeline.from_pretrained('tencent/HY-World-2.0')
+        result = pipeline('path/to/images')
+        ```
+
+        `pipeline(...)` returns the output directory path as a string. Model weights are downloaded from HuggingFace automatically on the first call.
+
+        <Tip>
+          Pass a directory of JPEG or PNG images, or a path to a video file. Both formats are supported by the same pipeline call.
+        </Tip>
+      </Tab>
+
+      <Tab title="CLI">
+        The CLI exposes all pipeline parameters as command-line flags and is suitable for scripting or batch processing.
+
+        **Images input:**
+
+        ```bash
+        python -m hyworld2.worldrecon.pipeline --input_path path/to/images
+        ```
+
+        **Video input:**
+
+        ```bash
+        python -m hyworld2.worldrecon.pipeline --input_path path/to/video.mp4
+        ```
+
+        When given a video file, the pipeline extracts frames automatically using a motion-aware strategy (default: 1 FPS, up to 32 frames). You can control extraction with `--fps`, `--video_min_frames`, and `--video_max_frames`.
+
+        For the full list of flags, see the [CLI reference](/worldmirror/cli).
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="View outputs">
+    Results are written to `inference_output/<case_name>/<timestamp>/` relative to your working directory. The folder contains:
+
+    | File / folder | Description |
+    |---|---|
+    | `gaussians.ply` | 3D Gaussian Splatting scene (importable into standard 3DGS viewers) |
+    | `points.ply` | Colored point cloud derived from predicted depth maps |
+    | `depth/` | Per-view depth visualizations (PNG) and raw float32 arrays (NPY) |
+    | `normal/` | Per-view surface normal maps (PNG) |
+    | `camera_params.json` | Camera extrinsics (c2w) and intrinsics for all views |
+
+    Open `gaussians.ply` in any 3DGS viewer (e.g., [SuperSplat](https://supersplat.dev)) to interactively explore the reconstructed scene.
+  </Step>
+</Steps>
+
+## Prior injection
+
+If you have known camera poses or depth maps from an external source (e.g., COLMAP, ARKit, a depth sensor), you can inject them as conditioning priors to improve reconstruction accuracy:
+
+```python
+result = pipeline(
+    'path/to/images',
+    prior_cam_path='path/to/prior_camera.json',
+    prior_depth_path='path/to/prior_depth/',
+)
+```
+
+Priors are optional and can be provided independently — supply only `prior_cam_path`, only `prior_depth_path`, or both. The pipeline detects which priors are available and conditions accordingly.
+
+<Note>
+  The `prior_camera.json` file uses the same format as the `camera_params.json` output produced by the pipeline. You can use outputs from a previous run as priors for a subsequent refined pass. See [Prior injection](/worldmirror/prior-injection) for the full schema and depth map format.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Python API reference" icon="code" href="/worldmirror/python-api">
+    Full parameter reference for `WorldMirrorPipeline.from_pretrained` and `pipeline()`
+  </Card>
+  <Card title="CLI reference" icon="terminal" href="/worldmirror/cli">
+    All command-line flags, boolean conventions, and multi-GPU torchrun usage
+  </Card>
+  <Card title="Prior injection" icon="location-crosshairs" href="/worldmirror/prior-injection">
+    Camera JSON schema, depth map formats, and how to combine multiple prior types
+  </Card>
+  <Card title="Multi-GPU inference" icon="server" href="/worldmirror/multi-gpu">
+    Run WorldMirror 2.0 across multiple GPUs with FSDP and bfloat16
+  </Card>
+</CardGroup>

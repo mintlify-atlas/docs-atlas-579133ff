@@ -1,0 +1,208 @@
+---
+title: "Advanced options for WorldMirror 2.0 inference"
+description: "Free GPU memory by disabling heads, filter noisy sky and edge points, tune voxel compression settings, and render fly-through videos from 3DGS output."
+---
+
+The default WorldMirror 2.0 configuration is tuned for general use, but several advanced options let you trade memory for speed, improve output quality by filtering noisy regions, or reduce file sizes for large scenes. Use these options when you need only a subset of outputs, are working with limited GPU memory, or want finer control over the point cloud and Gaussian geometry.
+
+<AccordionGroup>
+
+<Accordion title="Disabling prediction heads">
+
+WorldMirror 2.0 has five independently loadable prediction heads: `camera`, `depth`, `normal`, `points`, and `gs`. Each head contributes approximately 200M parameters. If you only need a subset of outputs, you can disable the unused heads at pipeline creation time to free GPU memory before inference.
+
+```python
+from hyworld2.worldrecon.pipeline import WorldMirrorPipeline
+
+pipeline = WorldMirrorPipeline.from_pretrained(
+    "tencent/HY-World-2.0",
+    disable_heads=["normal", "points"],  # free ~200M params each
+)
+```
+
+Pass the corresponding `save_*=False` flags at inference time to avoid errors from missing head outputs:
+
+```python
+pipeline(
+    "path/to/images",
+    save_normal=False,
+    save_points=False,
+)
+```
+
+Available head names:
+
+| Head | Output produced | Save flag |
+|------|-----------------|-----------|
+| `camera` | Camera poses and intrinsics | `save_camera` |
+| `depth` | Per-view depth maps | `save_depth` |
+| `normal` | Per-view surface normal maps | `save_normal` |
+| `points` | Depth-derived point cloud (`points.ply`) | `save_points` |
+| `gs` | 3D Gaussian Splatting (`gaussians.ply`) | `save_gs` |
+
+The CLI equivalent uses space-separated head names:
+
+```bash
+python -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --disable_heads normal points \
+    --no_save_normal \
+    --no_save_points
+```
+
+<Tip>
+Disabling the `gs` head saves the most memory, as Gaussian attributes are the largest output. Disable it when you only need depth, normals, or camera estimates.
+</Tip>
+
+</Accordion>
+
+<Accordion title="Mask filtering">
+
+The pipeline supports three independent mask types that filter noisy or unreliable points from both `points.ply` and `gaussians.ply`. Masks are computed separately for each output: the Gaussian output uses its own depth predictions for edge detection when available.
+
+**Sky mask** (`apply_sky_mask=True` by default)
+
+Removes sky regions using a combination of ONNX-based segmentation and model-predicted depth masks. The `sky_mask_source` parameter controls which signal is used:
+
+| `sky_mask_source` | Behavior |
+|-------------------|----------|
+| `"auto"` (default) | Fuse ONNX segmentation with model sky predictions |
+| `"model"` | Use only the model's own depth-based sky detection |
+| `"onnx"` | Use only the external ONNX segmentation model |
+
+The `model_sky_threshold` parameter (default `0.45`) sets the confidence cutoff for model-based sky pixel detection.
+
+```python
+pipeline(
+    "path/to/images",
+    apply_sky_mask=True,
+    sky_mask_source="auto",
+    model_sky_threshold=0.45,
+)
+```
+
+**Edge mask** (`apply_edge_mask=True` by default)
+
+Removes points at depth and normal discontinuities — object silhouettes and boundaries where depth estimates are unreliable. Two thresholds control sensitivity:
+
+| Parameter | Default | Effect |
+|-----------|---------|--------|
+| `edge_depth_threshold` | `0.03` | Relative depth gradient tolerance — lower values produce stricter masks |
+| `edge_normal_threshold` | `1.0` | Normal gradient tolerance — lower values produce stricter masks |
+
+```python
+pipeline(
+    "path/to/images",
+    apply_edge_mask=True,
+    edge_depth_threshold=0.02,
+    edge_normal_threshold=0.8,
+)
+```
+
+**Confidence mask** (`apply_confidence_mask=False` by default)
+
+Removes the bottom N% of points by prediction confidence score. Disabled by default because it can be overly aggressive in scenes with textureless regions. Enable it when prediction quality varies significantly across a scene.
+
+```python
+pipeline(
+    "path/to/images",
+    apply_confidence_mask=True,
+    confidence_percentile=10.0,  # remove bottom 10% by confidence
+)
+```
+
+The CLI uses `--apply_confidence_mask` to enable and `--no_sky_mask` / `--no_edge_mask` to disable the defaults.
+
+</Accordion>
+
+<Accordion title="Point cloud compression">
+
+By default (`compress_pts=True`), the depth-derived point cloud undergoes a two-stage compression pipeline before being saved as `points.ply`.
+
+**Stage 1: Voxel merging**
+
+The scene is partitioned into a regular voxel grid with cell size `compress_pts_voxel_size` (default `0.002`). All points that fall within the same voxel are merged into a single point via weighted averaging, where weights come from per-point confidence scores. This removes redundant points in densely sampled regions while preserving overall structure.
+
+```python
+pipeline(
+    "path/to/images",
+    compress_pts=True,
+    compress_pts_voxel_size=0.005,  # coarser voxels → fewer points
+)
+```
+
+**Stage 2: Random subsampling**
+
+If the merged point count still exceeds `compress_pts_max_points` (default `2,000,000`), points are uniformly subsampled down to that limit.
+
+```python
+pipeline(
+    "path/to/images",
+    compress_pts_max_points=1_000_000,  # cap at 1M points
+)
+```
+
+**Gaussian compression**
+
+Gaussians (`gaussians.ply`) are compressed separately using voxel pruning with weighted averaging of means, scales, quaternions, colors, and opacities. The `compress_gs_max_points` parameter (default `5,000,000`) caps the number of saved Gaussians.
+
+```python
+pipeline(
+    "path/to/images",
+    compress_gs_max_points=2_000_000,
+)
+```
+
+To disable point cloud compression entirely and save all raw points:
+
+```bash
+python -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --no_compress_pts
+```
+
+<Warning>
+Disabling compression on scenes with many input frames can produce very large PLY files. A 32-frame video at 952px resolution generates up to 29M raw points before compression.
+</Warning>
+
+</Accordion>
+
+<Accordion title="Rendered video">
+
+Setting `save_rendered=True` renders an interpolated fly-through video from the predicted Gaussian splats. The camera path is constructed by interpolating between all predicted camera positions in order, producing a smooth traversal of the scene.
+
+```python
+pipeline(
+    "path/to/images",
+    save_rendered=True,
+    render_interp_per_pair=15,  # frames between each camera pair
+    render_depth=False,         # also render depth video
+)
+```
+
+Output files are written to the `rendered/` subdirectory:
+
+| File | Description |
+|------|-------------|
+| `rendered/rendered_rgb.mp4` | RGB fly-through video |
+| `rendered/rendered_depth.mp4` | Depth visualization video (requires `render_depth=True`) |
+
+The `render_interp_per_pair` parameter (default `15`) controls how many intermediate frames are generated between consecutive camera pairs. Increasing this value produces smoother but longer videos.
+
+The CLI flags are:
+
+```bash
+python -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --save_rendered \
+    --render_interp_per_pair 20 \
+    --render_depth
+```
+
+<Tip>
+Rendered videos are generated entirely from the predicted Gaussian splats — no additional neural network inference is required. Rendering is fast even for large Gaussian counts, as it uses the standard 3DGS rasterizer.
+</Tip>
+
+</Accordion>
+
+</AccordionGroup>

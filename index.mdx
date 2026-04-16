@@ -1,97 +1,81 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "HY-World 2.0: Build 3D Worlds from Text and Images"
+description: "HY-World 2.0 is a multi-modal world model that reconstructs and generates navigable 3D scenes as real 3DGS and mesh assets — not videos."
 ---
 
-## Setting up
+HY-World 2.0 is an open-source multi-modal world model from Tencent that transforms text prompts, single images, multi-view photos, or casual videos into persistent, navigable 3D worlds. Unlike video-based world models, HY-World 2.0 produces real 3D assets — 3D Gaussian Splatting (3DGS) and meshes — that can be imported directly into Blender, Unity, Unreal Engine, and Isaac Sim.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Installation" icon="wrench" href="/getting-started/installation">
+    Set up the conda environment, install PyTorch, and get HY-World 2.0 running on your GPU
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Quickstart" icon="rocket" href="/getting-started/quickstart">
+    Run your first 3D reconstruction from images or video in minutes
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="WorldMirror 2.0" icon="cube" href="/worldmirror/overview">
+    Unified feed-forward model for depth, normals, camera poses, and 3DGS from multi-view input
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="World Generation" icon="wand-magic-sparkles" href="/worldgen/overview">
+    Generate full navigable 3D worlds from a single text prompt or image
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What HY-World 2.0 produces
 
-Everything you need to create world-class documentation.
+HY-World 2.0 outputs real 3D assets in a single forward pass — not video frames. You get:
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+- **3D Gaussian Splatting** (`.ply`) — renderable in real time on consumer GPUs
+- **Point clouds** (`.ply`) — colored, compressed 3D point maps in world coordinates
+- **Depth maps** — per-view depth in camera frame (PNG visualization + NPY raw values)
+- **Surface normals** — per-view normal maps (PNG)
+- **Camera parameters** — extrinsics and intrinsics (`camera_params.json`)
+- **COLMAP-format reconstruction** — for downstream SfM pipelines (optional)
 
-## Need inspiration?
+## Core capabilities
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<CardGroup cols={2}>
+  <Card title="World Reconstruction" icon="camera" href="/worldmirror/overview">
+    Multi-view images or video to 3DGS, point clouds, depth, normals, and camera poses in one pass
+  </Card>
+  <Card title="Prior Injection" icon="sliders" href="/worldmirror/prior-injection">
+    Inject known camera poses, intrinsics, or depth maps to improve reconstruction accuracy
+  </Card>
+  <Card title="Multi-GPU Inference" icon="server" href="/worldmirror/multi-gpu">
+    Scale across GPUs with Sequence Parallel, FSDP, and bfloat16 mixed precision
+  </Card>
+  <Card title="Interactive Demo" icon="play" href="/worldmirror/gradio-app">
+    Launch the Gradio web app to visualize 3DGS, depth, and normals in your browser
+  </Card>
+</CardGroup>
+
+## Get started in 3 steps
+
+<Steps>
+  <Step title="Install dependencies">
+    Create a conda environment with Python 3.10, install PyTorch 2.4 with CUDA 12.4, and install project requirements.
+
+    ```bash
+    conda create -n hyworld2 python=3.10
+    conda activate hyworld2
+    pip install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124
+    pip install -r requirements.txt
+    ```
+  </Step>
+  <Step title="Run reconstruction">
+    Point WorldMirror 2.0 at a directory of images or a video file. Model weights download automatically from Hugging Face on first run.
+
+    ```python
+    from hyworld2.worldrecon.pipeline import WorldMirrorPipeline
+
+    pipeline = WorldMirrorPipeline.from_pretrained('tencent/HY-World-2.0')
+    result = pipeline('path/to/images')
+    ```
+  </Step>
+  <Step title="Explore your 3D world">
+    Find your outputs in `inference_output/<scene_name>/<timestamp>/` — open `gaussians.ply` in a 3DGS viewer or import it into your game engine of choice.
+  </Step>
+</Steps>
+
+<Note>
+  HY-World 2.0 currently has WorldMirror 2.0 (world reconstruction) available as open-source. Full world generation code (WorldNav, WorldStereo 2.0, HY-Pano 2.0) is coming soon.
+</Note>

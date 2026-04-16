@@ -1,0 +1,141 @@
+---
+title: "WorldMirror 2.0 CLI: complete flag reference and examples"
+description: "Run WorldMirror 2.0 from the command line on one or more GPUs. Full flag reference, boolean conventions, and single-GPU vs multi-GPU usage examples."
+---
+
+Every parameter exposed by `WorldMirrorPipeline.__call__` is available as a command-line argument when running `hyworld2.worldrecon.pipeline` as a module. The CLI also accepts model-loading arguments (`--config_path`, `--ckpt_path`, `--use_fsdp`, `--enable_bf16`, `--fsdp_cpu_offload`, `--disable_heads`) that map to `WorldMirrorPipeline.from_pretrained`. After the first inference completes, the CLI enters an interactive prompt loop where you can enter additional input paths — pass `--no_interactive` to disable this behavior.
+
+## Basic usage
+
+```bash
+python -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images
+```
+
+Specify an output directory and set the inference resolution:
+
+```bash
+python -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --output_path my_results \
+    --target_size 756
+```
+
+## Single GPU vs multi-GPU
+
+<CodeGroup>
+
+```bash Single GPU
+python -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --output_path inference_output \
+    --target_size 952
+```
+
+```bash Multi-GPU (torchrun)
+torchrun --nproc_per_node=4 \
+    -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --output_path inference_output \
+    --use_fsdp --enable_bf16
+```
+
+</CodeGroup>
+
+## Video input
+
+Pass a video file directly as `--input_path`. Use `--fps`, `--video_strategy`, and `--video_max_frames` to control frame extraction:
+
+```bash
+python -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/video.mp4 \
+    --fps 2 \
+    --video_strategy new \
+    --video_max_frames 24 \
+    --output_path video_results
+```
+
+## Boolean flag conventions
+
+Many parameters are boolean flags. WorldMirror 2.0 follows these CLI conventions:
+
+| Purpose | Enable | Disable |
+|---------|--------|---------|
+| Save depth maps (default on) | *(omit)* | `--no_save_depth` |
+| Save normal maps (default on) | *(omit)* | `--no_save_normal` |
+| Save Gaussians (default on) | *(omit)* | `--no_save_gs` |
+| Save camera params (default on) | *(omit)* | `--no_save_camera` |
+| Save point cloud (default on) | *(omit)* | `--no_save_points` |
+| Save COLMAP (default off) | `--save_colmap` | *(omit)* |
+| Save confidence maps (default off) | `--save_conf` | *(omit)* |
+| Save sky masks (default off) | `--save_sky_mask` | *(omit)* |
+| Apply sky mask (default on) | *(omit)* | `--no_sky_mask` |
+| Apply edge mask (default on) | *(omit)* | `--no_edge_mask` |
+| Apply confidence mask (default off) | `--apply_confidence_mask` | *(omit)* |
+| Compress point cloud (default on) | *(omit)* | `--no_compress_pts` |
+| Log timing (default on) | *(omit)* | `--no_log_time` |
+| Render fly-through video (default off) | `--save_rendered` | *(omit)* |
+| Render depth video (default off) | `--render_depth` | *(omit)* |
+
+## Additional CLI-only arguments
+
+These arguments control model loading and are not available through `__call__`:
+
+| Argument | Description |
+|----------|-------------|
+| `--config_path PATH` | Path to a training config YAML, used together with `--ckpt_path` to load a custom local checkpoint. |
+| `--ckpt_path PATH` | Path to a local checkpoint file (`.ckpt` or `.safetensors`). Must be paired with `--config_path`. |
+| `--use_fsdp` | Enable Fully Sharded Data Parallel weight sharding. Requires `torchrun` with multiple GPUs. |
+| `--enable_bf16` | Cast model weights to bfloat16. Reduces memory and speeds up inference on Ampere and later GPUs. |
+| `--fsdp_cpu_offload` | Offload FSDP parameters to CPU between forward passes to save GPU memory. |
+| `--disable_heads HEADS…` | Space-separated list of prediction heads to disable. Options: `camera depth normal points gs`. Example: `--disable_heads camera normal` |
+| `--no_interactive` | Exit immediately after the first inference instead of entering the interactive prompt loop. |
+
+## Full argument reference
+
+All inference, save, mask, compression, prior, and rendering parameters from `__call__` are also available:
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--input_path` | str | *(required)* | Directory of images or path to a video file |
+| `--output_path` | str | `inference_output` | Root output directory |
+| `--strict_output_path` | str | None | Save directly to this path, skipping `case_name/timestamp` subdirectory |
+| `--target_size` | int | 952 | Maximum inference resolution (longest edge) |
+| `--fps` | int | 1 | Frame extraction rate for video inputs |
+| `--video_strategy` | str | `new` | Frame extraction strategy: `new` (motion-aware) or `old` (uniform) |
+| `--video_min_frames` | int | 1 | Minimum frames to extract from video |
+| `--video_max_frames` | int | 32 | Maximum frames to extract from video |
+| `--sky_mask_source` | str | `auto` | Sky detection method: `auto`, `model`, or `onnx` |
+| `--model_sky_threshold` | float | 0.45 | Model-based sky detection threshold |
+| `--confidence_percentile` | float | 10.0 | Bottom N% to remove when confidence mask is enabled |
+| `--edge_normal_threshold` | float | 1.0 | Normal gradient tolerance for edge detection |
+| `--edge_depth_threshold` | float | 0.03 | Depth gradient tolerance for edge detection |
+| `--compress_pts_max_points` | int | 2000000 | Maximum points in saved point cloud |
+| `--compress_pts_voxel_size` | float | 0.002 | Voxel size for point cloud merging |
+| `--max_resolution` | int | 1920 | Maximum resolution for saved output images |
+| `--compress_gs_max_points` | int | 5000000 | Maximum Gaussians in saved PLY |
+| `--prior_cam_path` | str | None | Path to camera parameters JSON |
+| `--prior_depth_path` | str | None | Path to directory of depth map files |
+| `--render_interp_per_pair` | int | 15 | Interpolated frames per camera pair for rendered video |
+
+## Example: COLMAP output with prior injection
+
+```bash
+python -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --prior_cam_path path/to/camera_params.json \
+    --prior_depth_path path/to/depth_maps/ \
+    --save_colmap \
+    --no_interactive
+```
+
+## Example: Disable heads for faster camera-only inference
+
+```bash
+python -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --disable_heads depth normal points gs \
+    --no_save_depth --no_save_normal \
+    --no_save_points --no_save_gs \
+    --no_interactive
+```

@@ -1,0 +1,55 @@
+---
+title: "World generation: text and image to 3D scenes"
+description: "A four-stage pipeline — HY-Pano 2.0, WorldNav, WorldStereo 2.0, and WorldMirror 2.0 — converts a text prompt or single image into a navigable 3D world."
+---
+
+World generation is the synthesis half of HY-World 2.0. Starting from nothing more than a text description or a single photograph, it produces a fully navigable 3D world saved as 3D Gaussian Splatting (3DGS) or mesh assets — not a video clip. Unlike world reconstruction, which derives 3D structure from existing multi-view photos or footage, world generation synthesizes new geometry and appearance entirely from scratch, then composes it into a persistent scene you can explore in Blender, Unity, Unreal Engine, or Isaac Sim.
+
+## The four-stage pipeline
+
+World generation runs through four sequential stages, each handled by a dedicated model component.
+
+<Steps>
+  <Step title="Panorama generation — HY-Pano 2.0">
+    An MMDiT-based model converts a text prompt or a single-view image into a 360° equirectangular panorama. This panorama gives the downstream stages a complete view of the scene's appearance and layout before any 3D structure is computed.
+  </Step>
+  <Step title="Trajectory planning — WorldNav">
+    WorldNav analyses the panorama and plans a physically plausible camera trajectory through the scene. The trajectory defines the viewpoints that WorldStereo 2.0 will render, ensuring the final world is fully explorable from a variety of angles.
+  </Step>
+  <Step title="World expansion — WorldStereo 2.0">
+    A memory-driven video generation model takes the panorama and the planned camera trajectory and renders a consistent multi-view sequence. A persistent memory buffer keeps appearance and geometry coherent as the virtual camera moves through the scene.
+  </Step>
+  <Step title="World composition — WorldMirror 2.0 + 3DGS">
+    WorldMirror 2.0 lifts the multi-view frames into a dense point cloud with camera parameters. A 3DGS optimization step then fits Gaussian primitives — means, scales, rotations, opacities, and spherical harmonics — to the point cloud, producing the final real-time-renderable 3D world.
+  </Step>
+</Steps>
+
+## Open-source status
+
+<Note>
+  WorldMirror 2.0 — the world composition stage — is open-source today. HY-Pano 2.0, WorldNav, and WorldStereo 2.0 are still pending release. As interim alternatives, use [HunyuanWorld 1.0](https://github.com/Tencent-Hunyuan/HunyuanWorld-1.0) for panorama generation and [WorldStereo](https://github.com/FuchengSu/WorldStereo) for world expansion.
+</Note>
+
+| Stage | Component | Status |
+|-------|-----------|--------|
+| Panorama generation | HY-Pano 2.0 | Coming soon |
+| Trajectory planning | WorldNav | Coming soon |
+| World expansion | WorldStereo 2.0 | Coming soon |
+| World composition | WorldMirror 2.0 + 3DGS | Available now |
+
+## Explore the pipeline stages
+
+<CardGroup cols={2}>
+  <Card title="Panorama generation" icon="panorama" href="/worldgen/panorama-generation">
+    HY-Pano 2.0 generates 360° equirectangular panoramas from text or a single image using an MMDiT-based architecture.
+  </Card>
+  <Card title="World expansion" icon="expand" href="/worldgen/world-expansion">
+    WorldStereo 2.0 uses memory-driven video generation to expand a panorama into a multi-view sequence along a planned camera trajectory.
+  </Card>
+  <Card title="World composition" icon="layer-group" href="/worldgen/world-composition">
+    WorldMirror 2.0 and 3DGS optimization fuse the multi-view frames into a fully navigable, real-time-renderable 3D world.
+  </Card>
+  <Card title="WorldMirror 2.0" icon="cube" href="/worldmirror/overview">
+    Deep-dive into the reconstruction backbone powering the composition stage, including Python API, CLI, and prior injection.
+  </Card>
+</CardGroup>

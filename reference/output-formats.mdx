@@ -1,0 +1,151 @@
+---
+title: "Output file formats and directory structure"
+description: "All output files from WorldMirror 2.0: gaussians.ply, points.ply, depth maps, normals, camera_params.json, and optional COLMAP output with schema details."
+---
+
+Every WorldMirror 2.0 inference run writes its results into a structured output directory. By default, files land under `inference_output/<case_name>/<timestamp>/`, where `<case_name>` is derived from the input path and `<timestamp>` is an ISO-format string that prevents collisions between runs. Each subdirectory and file has a specific format and purpose, described in full below.
+
+## Directory tree
+
+```bash
+inference_output/
+└── <case_name>/
+    └── <timestamp>/
+        ├── depth/
+        │   ├── depth_0000.png      # Normalized depth visualization
+        │   ├── depth_0000.npy      # Raw float32 depth values [H, W]
+        │   └── ...
+        ├── normal/
+        │   ├── normal_0000.png     # Normal map visualization (RGB)
+        │   └── ...
+        ├── camera_params.json      # Camera extrinsics & intrinsics
+        ├── gaussians.ply           # 3D Gaussian Splatting (standard format)
+        ├── points.ply              # Colored point cloud
+        ├── sparse/                 # COLMAP format (if --save_colmap)
+        │   └── 0/
+        │       ├── cameras.bin
+        │       ├── images.bin
+        │       └── points3D.bin
+        ├── rendered/               # Rendered video (if --save_rendered)
+        │   ├── rendered_rgb.mp4
+        │   └── rendered_depth.mp4  # (if --render_depth)
+        └── pipeline_timing.json    # Performance timing report
+```
+
+## Output file reference
+
+| File / directory | Format | Description | When produced |
+|------------------|--------|-------------|---------------|
+| `depth/depth_XXXX.png` | PNG (8-bit) | Normalized depth visualization for each input view | `save_depth=True` (default) |
+| `depth/depth_XXXX.npy` | NumPy float32 `[H, W]` | Raw metric depth values in camera frame | `save_depth=True` (default) |
+| `normal/normal_XXXX.png` | PNG (RGB) | Surface normal map visualization for each input view | `save_normal=True` (default) |
+| `camera_params.json` | JSON | Camera extrinsics (c2w 4×4) and intrinsics (3×3) for all views | `save_camera=True` (default) |
+| `gaussians.ply` | PLY (3DGS standard) | 3D Gaussian Splatting attributes: means, scales, rotations, opacities, SH coefficients | `save_gs=True` (default) |
+| `points.ply` | PLY (colored point cloud) | Depth-derived dense colored point cloud in world coordinates | `save_points=True` (default) |
+| `sparse/0/` | COLMAP binary | Sparse reconstruction with `cameras.bin`, `images.bin`, `points3D.bin` | `save_colmap=True` |
+| `rendered/rendered_rgb.mp4` | MP4 video | Interpolated fly-through video rendered from Gaussian splats | `save_rendered=True` |
+| `rendered/rendered_depth.mp4` | MP4 video | Depth visualization fly-through video | `save_rendered=True` and `render_depth=True` |
+| `pipeline_timing.json` | JSON | Per-stage wall-clock timing breakdown | `log_time=True` (default) |
+
+## Predictions dictionary
+
+When using the Python API, the pipeline internally produces a `predictions` dictionary. You can access it by subclassing the pipeline or adding custom post-processing hooks. The full structure is:
+
+```python
+# Geometry
+predictions["depth"]         # [B, S, H, W, 1]  — Z-depth in camera frame
+predictions["depth_conf"]    # [B, S, H, W]      — Depth confidence score
+predictions["normals"]       # [B, S, H, W, 3]   — Surface normals in camera coords
+predictions["normals_conf"]  # [B, S, H, W]      — Normal confidence score
+predictions["pts3d"]         # [B, S, H, W, 3]   — 3D point maps in world coords
+predictions["pts3d_conf"]    # [B, S, H, W]      — Point confidence score
+
+# Camera
+predictions["camera_poses"]  # [B, S, 4, 4]      — Camera-to-world (c2w), OpenCV convention
+predictions["camera_intrs"]  # [B, S, 3, 3]      — Camera intrinsic matrices
+predictions["camera_params"] # [B, S, 9]         — Compact vector: translation, quaternion, fov_v, fov_u
+
+# 3D Gaussian Splatting
+predictions["splats"]["means"]      # [B, N, 3]     — Gaussian centers
+predictions["splats"]["scales"]     # [B, N, 3]     — Gaussian scales
+predictions["splats"]["quats"]      # [B, N, 4]     — Gaussian rotations (quaternions)
+predictions["splats"]["opacities"]  # [B, N]        — Gaussian opacities
+predictions["splats"]["sh"]         # [B, N, 1, 3]  — Spherical harmonics (degree 0)
+predictions["splats"]["weights"]    # [B, N]        — Per-Gaussian confidence weights
+```
+
+### Dimension key
+
+| Symbol | Meaning |
+|--------|---------|
+| `B` | Batch size — always `1` during inference |
+| `S` | Number of input views (images or extracted video frames) |
+| `H` | Image height at inference resolution |
+| `W` | Image width at inference resolution |
+| `N` | Total Gaussians — equal to `S × H × W` |
+
+## Camera parameters JSON format
+
+`camera_params.json` uses the same schema whether it is an output from the pipeline or an input prior. Both `extrinsics` and `intrinsics` lists can be provided independently — an empty list `[]` or a missing key means that prior is unavailable.
+
+```json
+{
+  "num_cameras": 2,
+  "extrinsics": [
+    {
+      "camera_id": 0,
+      "matrix": [
+        [0.98, 0.01, -0.17, 0.52],
+        [-0.01, 0.99, 0.01, -0.03],
+        [0.17, -0.01, 0.98, 1.20],
+        [0.0, 0.0, 0.0, 1.0]
+      ]
+    }
+  ],
+  "intrinsics": [
+    {
+      "camera_id": 0,
+      "matrix": [
+        [525.0, 0.0, 320.0],
+        [0.0, 525.0, 240.0],
+        [0.0, 0.0, 1.0]
+      ]
+    }
+  ]
+}
+```
+
+### Field descriptions
+
+| Field | Description |
+|-------|-------------|
+| `camera_id` | Integer index (`0`, `1`, `2`, …) or the image filename stem without extension (e.g., `"image_0001"`) |
+| `extrinsics.matrix` | 4×4 camera-to-world (c2w) transformation matrix in OpenCV coordinate convention (Z forward, Y down) |
+| `intrinsics.matrix` | 3×3 camera intrinsic matrix in pixels: `fx`, `fy` are focal lengths; `cx`, `cy` are the principal point |
+
+<Note>
+Intrinsic values must correspond to the **original image resolution**. The pipeline automatically adjusts them for any inference-time resize and center-crop. Extrinsics are also automatically normalized relative to the first view, consistent with training behavior.
+</Note>
+
+## Saving to a fixed path
+
+By default, the pipeline appends `<case_name>/<timestamp>/` subdirectories to the output root, which prevents collisions between runs. To save directly to a specific path — useful in scripted pipelines where you manage file organization externally — use `strict_output_path`:
+
+```python
+pipeline(
+    "path/to/images",
+    strict_output_path="my_results/scene_001",
+)
+```
+
+The CLI equivalent is:
+
+```bash
+python -m hyworld2.worldrecon.pipeline \
+    --input_path path/to/images \
+    --strict_output_path my_results/scene_001
+```
+
+<Warning>
+When `strict_output_path` is set, repeated runs will overwrite the same directory. Remove or rename the directory between runs if you need to preserve previous results.
+</Warning>

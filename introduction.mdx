@@ -1,0 +1,58 @@
+---
+title: "HY-World 2.0: Multi-Modal 3D World Model"
+description: "HY-World 2.0 generates and reconstructs navigable 3D worlds as real 3DGS and mesh assets — not pixel videos that disappear after playback."
+---
+
+HY-World 2.0 is a multi-modal world model framework from Tencent that accepts text, single-view images, multi-view images, and video as input and produces persistent, navigable 3D worlds represented as meshes and 3D Gaussian Splattings (3DGS). It covers two distinct capabilities: generating entirely new 3D worlds from a prompt or image, and reconstructing 3D structure from existing photos or video — all in a unified system.
+
+## Two core capabilities
+
+HY-World 2.0 is organized around two primary workflows.
+
+**World Generation** (text / single image → 3D world) synthesizes high-fidelity, navigable 3D scenes through a four-stage pipeline: panorama generation with HY-Pano 2.0, camera trajectory planning with WorldNav, world expansion with WorldStereo 2.0, and world composition with WorldMirror 2.0 and 3DGS optimization.
+
+**World Reconstruction** (multi-view images / video → 3D) is powered by WorldMirror 2.0, a unified feed-forward model that simultaneously predicts dense point clouds, depth maps, surface normals, camera parameters, and 3DGS attributes in a single forward pass from multi-view input.
+
+<CardGroup cols={2}>
+  <Card title="System architecture" icon="sitemap" href="/architecture">
+    Understand the four-stage world generation pipeline and WorldMirror 2.0's architectural design
+  </Card>
+  <Card title="Installation" icon="wrench" href="/getting-started/installation">
+    Set up the conda environment, install PyTorch with CUDA 12.4, and run your first inference
+  </Card>
+  <Card title="WorldMirror 2.0" icon="cube" href="/worldmirror/overview">
+    Reconstruct 3D scenes from multi-view images or video using the open-source WorldMirror 2.0 model
+  </Card>
+  <Card title="World generation" icon="wand-magic-sparkles" href="/worldgen/overview">
+    Generate full navigable 3D worlds from a single text prompt or image
+  </Card>
+</CardGroup>
+
+## Why 3D world models?
+
+Existing world models such as Genie 3 and Cosmos generate pixel-level videos — essentially a movie that vanishes once playback ends. HY-World 2.0 takes a fundamentally different approach: it directly produces editable, persistent 3D assets (meshes and 3DGS) that can be imported into game engines like Blender, Unity, Unreal Engine, and Isaac Sim. This paradigm shift resolves several long-standing pain points of video world models:
+
+|  | Video world models | 3D world model (HY-World 2.0) |
+|--|---|---|
+| **Output** | Pixel videos (non-editable) | Real 3D assets — meshes / 3DGS (fully editable) |
+| **Playable duration** | Limited (typically 1 min) | Unlimited — assets persist permanently |
+| **3D consistency** | No (flickering, artifacts across views) | Native — inherently consistent in 3D |
+| **Real-time rendering** | Requires per-frame inference; high latency | Consumer GPUs can render in real time |
+| **Controllability** | Weak (imprecise character control, no real physics) | Precise — zero-error control, real physics collision, accurate lighting |
+| **Inference cost** | Accumulates with every interaction | One-time generation; rendering cost ≈ 0 |
+| **Engine compatibility** | Video files only | Directly importable into Blender / UE / Isaac Engine |
+
+## Open-source status
+
+<Note>
+  WorldMirror 2.0 inference code and model weights are available now. Full world generation code — including HY-Pano 2.0, WorldNav, and WorldStereo 2.0 — is being released incrementally. See the [model zoo](/model-zoo) for current download links and the release schedule.
+</Note>
+
+The current open-source release includes:
+
+- **Released**: Technical report, WorldMirror 2.0 inference code, and model checkpoints
+- **Coming soon**: Full world generation inference code (WorldNav + world composition)
+- **Coming soon**: HY-Pano 2.0 panorama generation model and code
+- **Coming soon**: WorldStereo 2.0 world expansion model and code
+
+As an interim, [WorldStereo](https://github.com/FuchengSu/WorldStereo) and [HunyuanWorld 1.0](https://github.com/Tencent-Hunyuan/HunyuanWorld-1.0) are available for background reference on world generation and reconstruction methods.

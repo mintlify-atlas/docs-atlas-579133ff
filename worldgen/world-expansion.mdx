@@ -1,0 +1,60 @@
+---
+title: "WorldStereo 2.0: panorama to 3DGS world"
+description: "WorldStereo 2.0 uses memory-driven video generation to expand a panorama and camera trajectory into a consistent multi-view sequence for 3DGS composition."
+---
+
+WorldStereo 2.0 is the world expansion stage of the HY-World 2.0 generation pipeline. It receives the 360° panorama from HY-Pano 2.0 and the planned camera trajectory from WorldNav, then generates a spatially consistent sequence of views along that trajectory. The result is a dense multi-view image set that the final stage — WorldMirror 2.0 and 3DGS optimization — can lift into a full 3D world. WorldStereo 2.0's central challenge is maintaining visual consistency as the virtual camera moves further and further from the initial panorama viewpoint, which it addresses through a persistent memory buffer.
+
+## Role in the pipeline
+
+WorldStereo 2.0 occupies the third stage of world generation, between trajectory planning and world composition.
+
+| Stage | Component | Input | Output |
+|-------|-----------|-------|--------|
+| 2 | WorldNav | Panorama | Camera trajectory |
+| **3** | **WorldStereo 2.0** | **Panorama + camera trajectory** | **Multi-view image sequence** |
+| 4 | WorldMirror 2.0 + 3DGS | Multi-view frames | Navigable 3D world |
+
+The multi-view frames produced by WorldStereo 2.0 must be geometrically coherent — consistent in camera pose, scale, and appearance — so that WorldMirror 2.0 can successfully reconstruct a unified point cloud from them.
+
+## Memory-driven video generation
+
+WorldStereo 2.0 approaches world expansion as a video generation problem, where each "frame" corresponds to a novel viewpoint along the trajectory. The key innovation is a **memory buffer** that accumulates information about already-rendered regions of the scene and makes it available when generating new views. Without memory, a model generating frame *N* has no explicit knowledge of what was rendered at frames *1* through *N−1*, causing drift in appearance and geometry. The memory buffer prevents this drift, allowing WorldStereo 2.0 to produce long, globally consistent sequences.
+
+## Performance benchmarks
+
+### Camera control
+
+The table below compares WorldStereo 2.0 against SEVA, Gen3C, and its predecessor WorldStereo on camera control accuracy (lower is better) and visual quality (higher is better).
+
+| Method | RotErr ↓ | TransErr ↓ | ATE ↓ | Q-Align ↑ | CLIP-IQA+ ↑ | Laion-Aes ↑ | CLIP-I ↑ |
+|--------|----------|-----------|-------|-----------|------------|------------|---------|
+| SEVA | 1.690 | 1.578 | 2.879 | 3.232 | 0.479 | 4.623 | 77.16 |
+| Gen3C | 0.944 | 1.580 | 2.789 | 3.353 | 0.489 | 4.863 | 82.33 |
+| WorldStereo | 0.762 | 1.245 | 2.141 | 4.149 | **0.547** | 5.257 | 89.05 |
+| **WorldStereo 2.0** | **0.492** | **0.968** | **1.768** | **4.205** | 0.544 | **5.266** | **89.43** |
+
+WorldStereo 2.0 achieves the best rotation error (RotErr), translation error (TransErr), and absolute trajectory error (ATE) of all methods, and leads on overall visual quality across Q-Align, Laion-Aes, and CLIP-I.
+
+### Single-view-generated reconstruction
+
+Reconstruction quality is measured on Tanks-and-Temples and MipNeRF360 using precision, recall, F1-score, and AUC.
+
+| Method | T&T Precision ↑ | T&T Recall ↑ | T&T F1 ↑ | T&T AUC ↑ | MN360 Precision ↑ | MN360 Recall ↑ | MN360 F1 ↑ | MN360 AUC ↑ |
+|--------|----------------|-------------|---------|---------|-----------------|---------------|-----------|-----------|
+| SEVA | 33.59 | 35.34 | 36.73 | 51.03 | 22.38 | 55.63 | 28.75 | 46.81 |
+| Gen3C | 46.73 | 25.51 | 31.24 | 42.44 | 23.28 | **75.37** | 35.26 | 52.10 |
+| Lyra | **50.38** | 28.67 | 32.54 | 43.05 | 30.02 | 58.60 | 36.05 | 49.89 |
+| FlashWorld | 26.58 | 20.72 | 22.29 | 30.45 | 35.97 | 53.77 | 42.60 | 53.86 |
+| WorldStereo 2.0 | 43.62 | 41.02 | 41.43 | 58.19 | **43.19** | 65.32 | **51.27** | **65.79** |
+| WorldStereo 2.0 (DMD) | 40.41 | **44.41** | **43.16** | **60.09** | 42.34 | 64.83 | 50.52 | 65.64 |
+
+On MipNeRF360, WorldStereo 2.0 leads all methods on precision, F1-score, and AUC — the three metrics most reflective of overall reconstruction coverage and accuracy.
+
+## Current status
+
+<Note>
+  WorldStereo 2.0 code and model weights are not yet released. As an interim alternative, the original [WorldStereo](https://github.com/FuchengSu/WorldStereo) repository provides a preview of the world expansion approach and is available on GitHub today.
+</Note>
+
+Once released, WorldStereo 2.0 will be documented here with a full Python API reference, CLI usage, and memory buffer configuration options.

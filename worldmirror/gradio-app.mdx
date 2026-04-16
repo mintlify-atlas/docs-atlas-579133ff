@@ -1,0 +1,73 @@
+---
+title: "WorldMirror 2.0 Gradio demo: setup and launch guide"
+description: "Launch the WorldMirror 2.0 Gradio app to upload images or video and visualize 3DGS, point clouds, depth maps, normals, and cameras in your browser."
+---
+
+The WorldMirror 2.0 Gradio app provides a browser-based interface for running reconstructions without writing any code. Upload a folder of images or a video, adjust inference settings, and immediately explore the resulting 3D Gaussian splats, colored point cloud, per-view depth maps, surface normals, and camera trajectory — all rendered interactively in the browser.
+
+## Quick start
+
+<CodeGroup>
+
+```bash Single GPU
+python -m hyworld2.worldrecon.gradio_app
+```
+
+```bash Multi-GPU
+torchrun --nproc_per_node=2 \
+    -m hyworld2.worldrecon.gradio_app \
+    --use_fsdp --enable_bf16
+```
+
+</CodeGroup>
+
+The server starts on `http://0.0.0.0:8081` by default. Open the URL in your browser to access the demo.
+
+## With a local checkpoint
+
+If you have downloaded weights locally or are testing a custom checkpoint, pass `--config_path` and `--ckpt_path` together:
+
+```bash
+python -m hyworld2.worldrecon.gradio_app \
+    --config_path /path/to/config.yaml \
+    --ckpt_path /path/to/checkpoint.safetensors
+```
+
+## With a public link
+
+To expose the demo over the internet — for example when running on a cloud VM, a Colab notebook, or any server without a public IP — add `--share`. Gradio will create a temporary public tunnel URL:
+
+```bash
+python -m hyworld2.worldrecon.gradio_app --share
+```
+
+<Note>
+In multi-GPU mode the number of input images must be **>= the number of GPUs** (`--nproc_per_node`). If you launch with `--nproc_per_node=4`, make sure to upload at least 4 images before clicking Run.
+</Note>
+
+## Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--port` | `8081` | TCP port for the Gradio HTTP server. |
+| `--host` | `0.0.0.0` | Host address to bind. Use `127.0.0.1` to restrict to localhost. |
+| `--share` | `False` | Create a public Gradio tunnel URL. Useful for Colab and remote servers. |
+| `--examples_dir` | `./examples/worldrecon` | Path to a directory of example scenes shown in the Gradio interface. |
+| `--config_path` | `None` | Training config YAML, used together with `--ckpt_path` for local checkpoint loading. |
+| `--ckpt_path` | `None` | Local checkpoint file (`.ckpt` or `.safetensors`). Must be paired with `--config_path`. |
+| `--use_fsdp` | `False` | Enable Fully Sharded Data Parallel weight sharding for multi-GPU mode. |
+| `--enable_bf16` | `False` | Enable bfloat16 mixed precision inference. |
+| `--fsdp_cpu_offload` | `False` | Offload FSDP parameters to CPU to reduce peak GPU memory. |
+
+## Multi-GPU Gradio server
+
+Running the Gradio app with `torchrun` scales inference across multiple GPUs identically to the CLI. The web server itself runs on rank 0 only — other ranks participate in distributed inference and then wait at a barrier:
+
+```bash
+torchrun --nproc_per_node=4 \
+    -m hyworld2.worldrecon.gradio_app \
+    --use_fsdp --enable_bf16 \
+    --port 8081
+```
+
+Access the demo at `http://<server-ip>:8081` as usual. The image count warning still applies: upload at least as many images as GPUs before running inference.

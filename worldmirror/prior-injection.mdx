@@ -1,0 +1,167 @@
+---
+title: "Inject camera and depth priors into WorldMirror 2.0"
+description: "Supply known camera poses, intrinsics, or depth maps as conditioning inputs to WorldMirror 2.0 to improve reconstruction accuracy on benchmark scenes."
+---
+
+Prior injection lets you pass geometric information you already have — known camera poses, focal lengths, or depth maps from another sensor or algorithm — directly into the WorldMirror 2.0 model as conditioning inputs. When priors are available, the model uses them to anchor its predictions, leading to measurably lower reconstruction error across all resolutions. On 7-Scenes and NRGBD at high resolution, providing all priors roughly halves both accuracy and completeness errors compared to running without priors.
+
+## Prior types and conditioning flags
+
+WorldMirror 2.0 supports three types of geometric priors. Each prior sets a corresponding bit in the internal `cond_flags` array that is passed to the model forward:
+
+| Prior | Internal flag | Input format |
+|-------|---------------|--------------|
+| Camera extrinsics (poses) | `cond_flags[0]` | 4×4 c2w matrix (OpenCV convention) |
+| Depth maps | `cond_flags[1]` | Per-view float depth maps |
+| Camera intrinsics | `cond_flags[2]` | 3×3 intrinsic matrix |
+
+Priors are detected automatically from the files you provide. You can supply any combination — extrinsics only, intrinsics only, depth only, or all three together.
+
+---
+
+## Camera parameters JSON
+
+Camera priors are passed as a JSON file using `prior_cam_path`. The file format is identical to the `camera_params.json` that WorldMirror outputs, so you can use a previous reconstruction's output directly as a prior for a new run.
+
+```json
+{
+  "num_cameras": 2,
+  "extrinsics": [
+    {
+      "camera_id": 0,
+      "matrix": [
+        [0.98, 0.01, -0.17, 0.52],
+        [-0.01, 0.99, 0.01, -0.03],
+        [0.17, -0.01, 0.98, 1.20],
+        [0.0, 0.0, 0.0, 1.0]
+      ]
+    },
+    {
+      "camera_id": 1,
+      "matrix": [
+        [0.95, 0.02, -0.31, 1.10],
+        [-0.02, 0.99, 0.01, -0.05],
+        [0.31, -0.01, 0.95, 1.85],
+        [0.0, 0.0, 0.0, 1.0]
+      ]
+    }
+  ],
+  "intrinsics": [
+    {
+      "camera_id": 0,
+      "matrix": [
+        [525.0, 0.0, 320.0],
+        [0.0, 525.0, 240.0],
+        [0.0, 0.0, 1.0]
+      ]
+    }
+  ]
+}
+```
+
+### Field descriptions
+
+| Field | Description |
+|-------|-------------|
+| `camera_id` | Integer index (`0`, `1`, `2`, …) matching the sorted order of the input images, or the image filename stem without extension (e.g., `"image_0001"`). |
+| `extrinsics.matrix` | 4×4 camera-to-world (c2w) transformation matrix in OpenCV coordinate convention (Z forward, Y down). |
+| `intrinsics.matrix` | 3×3 camera intrinsic matrix in pixels: `fx` and `fy` are the focal lengths; `cx` and `cy` are the principal point coordinates. |
+
+### Important notes
+
+- `extrinsics` and `intrinsics` can be provided independently or together. An empty list `[]` or an omitted key means that prior is not available — the model will predict it freely.
+- **Intrinsics resolution:** Values must correspond to the **original image resolution before any pipeline resizing**. WorldMirror automatically adjusts the intrinsics to account for the inference-time resize and center-crop applied to match `target_size`.
+- **Extrinsics alignment:** The pipeline automatically normalizes all extrinsics relative to the first view, which is consistent with training-time behavior. You do not need to pre-align poses yourself.
+
+---
+
+## Depth maps folder
+
+Depth priors are provided as a directory of per-view files using `prior_depth_path`. Each file must share the same filename stem as the corresponding input image.
+
+```
+prior_depth/
+├── image_0001.npy    # float32 array, shape [H, W], metric depth values
+├── image_0002.npy
+├── image_0003.npy
+└── ...
+```
+
+Supported file formats:
+
+| Format | Notes |
+|--------|-------|
+| `.npy` | float32 NumPy array, shape `[H, W]`. Recommended for best precision. |
+| `.exr` | OpenEXR single-channel float. Widely supported by computer vision tools. |
+| `.png` | 16-bit unsigned PNG. Values are interpreted as raw depth with no normalization. |
+
+Depth values should be in the same unit as the scene (typically meters). The pipeline handles resize and crop transformations automatically to align depth maps with inference-resolution images.
+
+---
+
+## Combining priors
+
+Priors can be mixed freely. All three examples below are valid:
+
+<CodeGroup>
+
+```bash Intrinsics only
+python -m hyworld2.worldrecon.pipeline \
+    --input_path images/ \
+    --prior_cam_path camera_intrinsics_only.json
+```
+
+```bash Depth only
+python -m hyworld2.worldrecon.pipeline \
+    --input_path images/ \
+    --prior_depth_path depth_maps/
+```
+
+```bash Camera poses + intrinsics + depth
+python -m hyworld2.worldrecon.pipeline \
+    --input_path images/ \
+    --prior_cam_path camera_params.json \
+    --prior_depth_path depth_maps/
+```
+
+</CodeGroup>
+
+---
+
+## Python API examples
+
+### Camera and intrinsics prior
+
+```python
+from hyworld2.worldrecon.pipeline import WorldMirrorPipeline
+
+pipeline = WorldMirrorPipeline.from_pretrained("tencent/HY-World-2.0")
+
+result = pipeline(
+    "path/to/images",
+    prior_cam_path="path/to/camera_params.json",
+)
+```
+
+### Depth prior only
+
+```python
+result = pipeline(
+    "path/to/images",
+    prior_depth_path="path/to/depth_maps/",
+)
+```
+
+### All priors combined
+
+```python
+result = pipeline(
+    "path/to/images",
+    prior_cam_path="path/to/camera_params.json",
+    prior_depth_path="path/to/depth_maps/",
+)
+```
+
+<Note>
+The `camera_params.json` output by any WorldMirror run can be used directly as `prior_cam_path` in a subsequent run, making it easy to chain reconstructions or refine an earlier result with additional views.
+</Note>

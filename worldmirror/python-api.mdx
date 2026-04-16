@@ -1,0 +1,315 @@
+---
+title: "WorldMirror 2.0 Python API: complete parameter reference"
+description: "Full parameter reference for WorldMirrorPipeline.from_pretrained and __call__, covering inference, save, mask, compression, prior, and rendering options."
+---
+
+The WorldMirror 2.0 Python API follows a `diffusers`-style pattern: create a pipeline with `from_pretrained`, then call it with an input path. Model weights are downloaded automatically from Hugging Face on first run. All parameters documented below are sourced directly from `hyworld2/worldrecon/pipeline.py`.
+
+## Installation and import
+
+```python
+from hyworld2.worldrecon.pipeline import WorldMirrorPipeline
+```
+
+---
+
+## `WorldMirrorPipeline.from_pretrained`
+
+Factory method that loads model weights, applies optional precision or sharding settings, and returns a ready-to-use pipeline instance. Distributed mode is auto-detected from the `WORLD_SIZE` environment variable set by `torchrun` — each rank must call this method independently.
+
+```python
+pipeline = WorldMirrorPipeline.from_pretrained(
+    pretrained_model_name_or_path="tencent/HY-World-2.0",
+    subfolder="HY-WorldMirror-2.0",
+    config_path=None,
+    ckpt_path=None,
+    use_fsdp=False,
+    enable_bf16=False,
+    fsdp_cpu_offload=False,
+    disable_heads=None,
+)
+```
+
+### Parameters
+
+<ParamField path="pretrained_model_name_or_path" type="str" default='"tencent/HY-World-2.0"'>
+  HuggingFace repo ID or local filesystem path. Model files are expected at `{path}/{subfolder}/model.safetensors` and `{path}/{subfolder}/config.yaml` (or `config.json`).
+</ParamField>
+
+<ParamField path="subfolder" type="str" default='"HY-WorldMirror-2.0"'>
+  Subfolder inside the repo that contains the WorldMirror checkpoint (`model.safetensors`) and its config. Override this when the checkpoint lives in a non-default location within a local repo clone.
+</ParamField>
+
+<ParamField path="config_path" type="str" default="None">
+  Path to a training config YAML. Used together with `ckpt_path` to load a custom local checkpoint. When both are provided, `pretrained_model_name_or_path` and `subfolder` are ignored.
+</ParamField>
+
+<ParamField path="ckpt_path" type="str" default="None">
+  Path to a checkpoint file (`.ckpt` or `.safetensors`). Must be paired with `config_path` for local checkpoint loading.
+</ParamField>
+
+<ParamField path="use_fsdp" type="bool" default="False">
+  Shard model parameters across GPUs using Fully Sharded Data Parallel (FSDP). Requires `torchrun` with at least 2 GPUs — this flag is silently ignored in single-GPU mode.
+</ParamField>
+
+<ParamField path="enable_bf16" type="bool" default="False">
+  Cast model weights to bfloat16 precision. Numerically critical layers (`MlpFP32.fc2`, `output_conv2`) are kept in float32 on single-GPU. In FSDP mode, all weights are cast uniformly to bfloat16 as required by FSDP flat-param constraints.
+</ParamField>
+
+<ParamField path="fsdp_cpu_offload" type="bool" default="False">
+  Offload FSDP parameters to CPU between forward passes. Reduces peak GPU memory at the cost of PCIe transfer overhead. Only active when `use_fsdp=True`.
+</ParamField>
+
+<ParamField path="disable_heads" type="list[str]" default="None">
+  List of prediction heads to disable and free from GPU memory before inference. Useful when you only need a subset of outputs. Available values: `"camera"`, `"depth"`, `"normal"`, `"points"`, `"gs"`. For example, `disable_heads=["normal", "points"]` frees approximately 200M parameters.
+</ParamField>
+
+---
+
+## `WorldMirrorPipeline.__call__`
+
+Runs inference on a directory of images or a video file and saves results to disk. Returns the output directory path as a string, or `None` if the input was skipped (for example, when fewer images are provided than required by the number of GPUs).
+
+```python
+result = pipeline(
+    input_path,
+    output_path="inference_output",
+    **kwargs,
+)
+```
+
+### Inference parameters
+
+<ParamField path="input_path" type="str" required>
+  Directory containing input images, or path to a video file. When a video is provided, frames are extracted according to `fps`, `video_strategy`, `video_min_frames`, and `video_max_frames`.
+</ParamField>
+
+<ParamField path="output_path" type="str" default='"inference_output"'>
+  Root output directory. Results are written to `{output_path}/{case_name}/{timestamp}/` unless `strict_output_path` is set.
+</ParamField>
+
+<ParamField path="target_size" type="int" default="952">
+  Maximum inference resolution in pixels (longest edge). Images are resized and center-cropped to the nearest multiple of 14. Effective pixel count is clamped to the 50K–500K range via adaptive resolution.
+</ParamField>
+
+<ParamField path="fps" type="int" default="1">
+  Frame extraction rate for video inputs. Higher values extract more frames at the cost of memory and compute.
+</ParamField>
+
+<ParamField path="video_strategy" type="str" default='"new"'>
+  Video frame extraction strategy. `"new"` uses motion-aware sampling to select diverse frames; `"old"` samples at a uniform rate according to `fps`.
+</ParamField>
+
+<ParamField path="video_min_frames" type="int" default="1">
+  Minimum number of frames to extract from a video.
+</ParamField>
+
+<ParamField path="video_max_frames" type="int" default="32">
+  Maximum number of frames to extract from a video. Caps memory usage for long videos.
+</ParamField>
+
+### Save parameters
+
+<ParamField path="save_depth" type="bool" default="True">
+  Save per-view depth maps: a PNG visualization (`depth_XXXX.png`) and raw float32 values (`depth_XXXX.npy`, shape `[H, W]`) for each input view.
+</ParamField>
+
+<ParamField path="save_normal" type="bool" default="True">
+  Save per-view surface normal maps as RGB PNG images (`normal_XXXX.png`).
+</ParamField>
+
+<ParamField path="save_gs" type="bool" default="True">
+  Save 3D Gaussian Splatting attributes as a PLY file (`gaussians.ply`) in standard 3DGS format.
+</ParamField>
+
+<ParamField path="save_camera" type="bool" default="True">
+  Save camera extrinsics and intrinsics as `camera_params.json`. This file can be passed back as `prior_cam_path` in future runs.
+</ParamField>
+
+<ParamField path="save_points" type="bool" default="True">
+  Save the depth-derived colored point cloud as `points.ply`.
+</ParamField>
+
+<ParamField path="save_colmap" type="bool" default="False">
+  Save a COLMAP-format sparse reconstruction under `sparse/0/` (`cameras.bin`, `images.bin`, `points3D.bin`). Useful for feeding WorldMirror output into downstream NeRF or mesh pipelines.
+</ParamField>
+
+<ParamField path="save_conf" type="bool" default="False">
+  Save per-view depth confidence maps alongside the depth outputs.
+</ParamField>
+
+<ParamField path="save_sky_mask" type="bool" default="False">
+  Save the computed sky segmentation masks as image files.
+</ParamField>
+
+### Mask parameters
+
+<ParamField path="apply_sky_mask" type="bool" default="True">
+  Filter out sky regions from point clouds and Gaussians using segmentation. Controlled by `sky_mask_source` and `model_sky_threshold`.
+</ParamField>
+
+<ParamField path="apply_edge_mask" type="bool" default="True">
+  Filter out points at depth or normal discontinuities (object boundaries and silhouettes). Controlled by `edge_depth_threshold` and `edge_normal_threshold`.
+</ParamField>
+
+<ParamField path="apply_confidence_mask" type="bool" default="False">
+  Remove the bottom N% of points by prediction confidence. Threshold controlled by `confidence_percentile`.
+</ParamField>
+
+<ParamField path="sky_mask_source" type="str" default='"auto"'>
+  Sky detection method. `"auto"` fuses ONNX-based segmentation with model-predicted depth masks; `"model"` uses model predictions only; `"onnx"` uses only the external segmentation model.
+</ParamField>
+
+<ParamField path="model_sky_threshold" type="float" default="0.45">
+  Confidence threshold for model-based sky pixel detection. Pixels with sky score above this value are masked.
+</ParamField>
+
+<ParamField path="confidence_percentile" type="float" default="10.0">
+  When `apply_confidence_mask=True`, the bottom N% of points by prediction confidence are discarded.
+</ParamField>
+
+<ParamField path="edge_normal_threshold" type="float" default="1.0">
+  Normal gradient tolerance for edge detection. Lower values produce stricter edge masks.
+</ParamField>
+
+<ParamField path="edge_depth_threshold" type="float" default="0.03">
+  Relative depth gradient tolerance for edge detection. Lower values produce stricter edge masks.
+</ParamField>
+
+### Compression parameters
+
+<ParamField path="compress_pts" type="bool" default="True">
+  Compress the point cloud via voxel merging followed by random subsampling if necessary. Keeps file sizes manageable for large scenes.
+</ParamField>
+
+<ParamField path="compress_pts_max_points" type="int" default="2000000">
+  Maximum number of points in the saved point cloud after compression. Points are uniformly subsampled if this limit is exceeded after voxel merging.
+</ParamField>
+
+<ParamField path="compress_pts_voxel_size" type="float" default="0.002">
+  Voxel size for point cloud merging. Points within the same voxel are averaged (weighted by confidence). Larger values produce sparser, smaller files.
+</ParamField>
+
+<ParamField path="max_resolution" type="int" default="1920">
+  Maximum resolution for saved output images (depth visualizations, normal maps). Images are downscaled if they exceed this value.
+</ParamField>
+
+<ParamField path="compress_gs_max_points" type="int" default="5000000">
+  Maximum number of Gaussians in the saved PLY file. Gaussians are voxel-pruned (with weighted averaging of means, scales, quaternions, colors, and opacities) and then subsampled if needed.
+</ParamField>
+
+### Prior parameters
+
+<ParamField path="prior_cam_path" type="str" default="None">
+  Path to a `camera_params.json` file providing known camera extrinsics and/or intrinsics as conditioning inputs. See the [prior injection guide](/worldmirror/prior-injection) for the expected JSON format.
+</ParamField>
+
+<ParamField path="prior_depth_path" type="str" default="None">
+  Path to a directory of per-view depth map files (`.npy`, `.exr`, or 16-bit `.png`). Filenames must match the input image filenames. See the [prior injection guide](/worldmirror/prior-injection) for details.
+</ParamField>
+
+### Rendered video parameters
+
+<ParamField path="save_rendered" type="bool" default="False">
+  Render an interpolated fly-through video from the predicted Gaussian splats and save it as `rendered/rendered_rgb.mp4`.
+</ParamField>
+
+<ParamField path="render_interp_per_pair" type="int" default="15">
+  Number of interpolated camera frames to generate between each consecutive camera pair when rendering the fly-through video.
+</ParamField>
+
+<ParamField path="render_depth" type="bool" default="False">
+  Also render a depth visualization video alongside the RGB video (`rendered/rendered_depth.mp4`). Only active when `save_rendered=True`.
+</ParamField>
+
+### Misc parameters
+
+<ParamField path="log_time" type="bool" default="True">
+  Print a timing breakdown to stdout and save it as `pipeline_timing.json` in the output directory.
+</ParamField>
+
+<ParamField path="strict_output_path" type="str" default="None">
+  If set, results are saved directly to this path without the `{case_name}/{timestamp}` subdirectory structure. Useful for scripted pipelines where you control the output location explicitly.
+</ParamField>
+
+---
+
+## Return value and predictions dictionary
+
+`pipeline(...)` returns the output directory path as a `str`, or `None` if the input was skipped.
+
+Internally, the model produces a `predictions` dictionary that is used by the save utilities. When extending the pipeline or running custom post-processing, the structure is:
+
+```python
+# Geometry
+predictions["depth"]         # [B, S, H, W, 1]  — Z-depth in camera frame
+predictions["depth_conf"]    # [B, S, H, W]      — Depth confidence score
+predictions["normals"]       # [B, S, H, W, 3]   — Surface normals in camera coords
+predictions["normals_conf"]  # [B, S, H, W]      — Normal confidence score
+predictions["pts3d"]         # [B, S, H, W, 3]   — 3D point maps in world coords
+predictions["pts3d_conf"]    # [B, S, H, W]      — Point confidence score
+
+# Camera
+predictions["camera_poses"]  # [B, S, 4, 4]      — Camera-to-world (c2w), OpenCV convention
+predictions["camera_intrs"]  # [B, S, 3, 3]      — Camera intrinsic matrices
+predictions["camera_params"] # [B, S, 9]         — Compact vector: translation, quaternion, fov_v, fov_u
+
+# 3D Gaussian Splatting
+predictions["splats"]["means"]      # [B, N, 3]     — Gaussian centers
+predictions["splats"]["scales"]     # [B, N, 3]     — Gaussian scales
+predictions["splats"]["quats"]      # [B, N, 4]     — Gaussian rotations (quaternions)
+predictions["splats"]["opacities"]  # [B, N]        — Gaussian opacities
+predictions["splats"]["sh"]         # [B, N, 1, 3]  — Spherical harmonics (degree 0)
+predictions["splats"]["weights"]    # [B, N]        — Per-Gaussian confidence weights
+```
+
+`B` is always 1 for inference, `S` is the number of input views, `H` and `W` are the inference image dimensions, and `N = S × H × W` is the total number of Gaussians.
+
+---
+
+## Complete examples
+
+### Minimal single-GPU run
+
+```python
+from hyworld2.worldrecon.pipeline import WorldMirrorPipeline
+
+pipeline = WorldMirrorPipeline.from_pretrained("tencent/HY-World-2.0")
+output_dir = pipeline("path/to/images")
+print(f"Results saved to: {output_dir}")
+```
+
+### Custom output options
+
+```python
+output_dir = pipeline(
+    "path/to/images",
+    output_path="my_results",
+    target_size=756,
+    save_colmap=True,
+    save_rendered=True,
+    compress_gs_max_points=2_000_000,
+)
+```
+
+### Disable unused heads to save memory
+
+```python
+pipeline = WorldMirrorPipeline.from_pretrained(
+    "tencent/HY-World-2.0",
+    disable_heads=["normal", "points"],  # free ~200M params
+)
+pipeline("path/to/images", save_normal=False, save_points=False)
+```
+
+### Video input
+
+```python
+pipeline = WorldMirrorPipeline.from_pretrained("tencent/HY-World-2.0")
+pipeline(
+    "path/to/video.mp4",
+    fps=2,
+    video_strategy="new",
+    video_max_frames=24,
+)
+```

@@ -1,0 +1,41 @@
+---
+title: "HY-Pano 2.0: text and image to 360° panoramas"
+description: "HY-Pano 2.0 is an MMDiT-based model that produces 360° equirectangular panoramas from text or a single image, forming the first world generation stage."
+---
+
+HY-Pano 2.0 is the first stage of HY-World 2.0's world generation pipeline. It takes a text description or a single-view image and produces a 360° equirectangular panorama that captures the full visual context of the scene. Every downstream stage — trajectory planning with WorldNav and world expansion with WorldStereo 2.0 — consumes this panorama as its primary input, so the quality and coherence of HY-Pano 2.0's output directly determines the fidelity of the final 3D world.
+
+## Role in the pipeline
+
+HY-Pano 2.0 sits at the very start of the generation process. Before any 3D structure is computed, the pipeline needs a complete, consistent picture of the scene from every direction. A panorama in equirectangular projection (ERP) provides exactly that: a single rectangular image whose horizontal axis maps to azimuth (0°–360°) and whose vertical axis maps to elevation (−90°–+90°). WorldNav uses this image to plan plausible camera trajectories, and WorldStereo 2.0 uses it as the appearance reference when synthesizing novel viewpoints.
+
+## Architecture
+
+HY-Pano 2.0 is built on **MMDiT** (Multi-Modal Diffusion Transformer), the same architecture family behind modern high-quality image generators. The key design choice is **implicit perspective-to-ERP mapping**: rather than explicitly re-projecting image patches into the equirectangular domain, the model learns the geometric relationship between perspective images and ERP layout as part of its attention mechanism. This allows it to generate globally consistent panoramas — free from the seam artifacts and projection distortions that plague explicit warping approaches — while conditioning on either text or an input photograph.
+
+| Property | Detail |
+|----------|--------|
+| Architecture | MMDiT (Multi-Modal Diffusion Transformer) |
+| Projection mapping | Implicit perspective-to-ERP |
+| Input modalities | Text prompt, single-view image |
+| Output format | 360° equirectangular projection (ERP) |
+| Output consumed by | WorldNav (trajectory planning), WorldStereo 2.0 (world expansion) |
+
+## Inputs and outputs
+
+**Inputs:**
+- **Text prompt** — a natural-language description of the scene (e.g., *"a sunlit Japanese garden with stone lanterns and a koi pond"*).
+- **Single-view image** — a photograph or rendered image of any real or synthetic scene.
+
+Both input types are accepted independently; you do not need both.
+
+**Output:**
+- A single **360° panorama** in equirectangular projection, typically at a high enough resolution to preserve fine scene details across the full azimuthal range.
+
+## Current status
+
+<Note>
+  HY-Pano 2.0 code and model weights are not yet released. As an interim alternative, [HunyuanWorld 1.0](https://github.com/Tencent-Hunyuan/HunyuanWorld-1.0) provides panorama generation capabilities and is available on GitHub today.
+</Note>
+
+Once released, HY-Pano 2.0 will be documented here with a full Python API reference, CLI usage, and configuration options.
